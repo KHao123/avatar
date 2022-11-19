@@ -1219,21 +1219,24 @@ AvatarOptimizer::AvatarOptimizer(Avatar &ava, const CameraIntrin &intrin,
       numParts(num_parts),
       partMap(part_map) {
     r.resize(ava.model.numJoints());
-
+    std::cout<<"#####33\n";
+    std::cout<<numParts;
     modelPartIndices.resize(numParts);
     modelPartLabelCounts.resize(numParts);
     modelPartClouds.resize(numParts);
     modelPartLabelCounts.setZero();
+    std::cout<<"#####34\n";
     for (size_t i = 0; i < ava.model.numPoints(); ++i) {
         int mainJointId = ava.model.assignedJoints[i][0].second;
         ++modelPartLabelCounts(partMap[mainJointId]);
     }
+    
     for (int i = 0; i < numParts; ++i) {
         if (modelPartLabelCounts(i) == 0) continue;
         modelPartClouds[i].resize(3, modelPartLabelCounts(i));
         modelPartIndices[i].resize(modelPartLabelCounts(i));
     }
-
+    
     modelPartLabelCounts.setZero();
     for (size_t i = 0; i < ava.model.numPoints(); ++i) {
         int mainJointId = ava.model.assignedJoints[i][0].second;
@@ -1241,6 +1244,7 @@ AvatarOptimizer::AvatarOptimizer(Avatar &ava, const CameraIntrin &intrin,
         modelPartIndices[partId][modelPartLabelCounts(partId)] = i;
         ++modelPartLabelCounts(partId);
     }
+    
 }
 
 void AvatarOptimizer::optimize(
@@ -1439,16 +1443,16 @@ void AvatarOptimizer::optimize(
         // //END DEBUG
         int cid = 0;
         size_t totalResiduals = 0;
-        for (int i = 0; i < ava.model.numPoints(); ++i) {
-            if (correspondences[i].empty()) continue;
-            totalResiduals += correspondences[i].size();
-            for (int j : correspondences[i]) {
-                problem.AddResidualBlock(
-                    new AvatarICPCostFunctor(common, cid, data_cloud, j), NULL,
-                    pointParams[i]);
-            }
-            ++cid;
-        }
+        // for (int i = 0; i < ava.model.numPoints(); ++i) {
+        //     if (correspondences[i].empty()) continue;
+        //     totalResiduals += correspondences[i].size();
+        //     for (int j : correspondences[i]) {
+        //         problem.AddResidualBlock(
+        //             new AvatarICPCostFunctor(common, cid, data_cloud, j), NULL,
+        //             pointParams[i]);
+        //     }
+        //     ++cid;
+        // }
 
         /** Scale the function weights according to number of ICP type
          * residuals. Otherwise the function terms become extremely imbalanced

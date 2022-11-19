@@ -20,7 +20,8 @@ AvatarModel::AvatarModel(const std::string& model_dir,
                          ? util::resolveRootPath("data/avatar-model")
                          : model_dir;
     // path npzPath = modelPath / "model.npz";
-    path npzPath = "/Users/chenkanghao/workspace/compare/smplxpp/data/models/smpl/SMPL_NEUTRAL.npz";
+    // path npzPath = "/Users/chenkanghao/workspace/compare/smplxpp/data/models/smpl/SMPL_NEUTRAL.npz";
+    path npzPath = "/Users/chenkanghao/workspace/compare/smplxpp/data/models/smplx/SMPLX_MALE.npz";
     // path posePriorPath = modelPath / "pose_prior.txt";
     // path posePriorPath = "";
     if (exists(npzPath)) {
@@ -29,9 +30,11 @@ AvatarModel::AvatarModel(const std::string& model_dir,
         size_t n_verts = npz["v_template"].shape[0];
         size_t n_joints = npz["kintree_table"].shape[1];
         size_t n_faces = npz["f"].shape[0];
+        // std::cout<<npzPath<<std::endl;
+        std::cout << npz["shapedirs"].shape[0] << std::endl;
         size_t n_shape_blends = npz["shapedirs"].shape[2];
         size_t n_blend_shapes = n_shape_blends;
-
+        std::cout << n_shape_blends << std::endl;
         using util::assertShape;
 
         // Load kintree
@@ -42,7 +45,8 @@ AvatarModel::AvatarModel(const std::string& model_dir,
                                .cast<int>()
                                .transpose();
         _ARK_ASSERT_EQ(parent[0], -1);
-
+        std::cout << parent.size() << std::endl;
+        // getchar();
         // Load base template
         const auto& verts_raw = npz.at("v_template");
         assertShape(verts_raw, {n_verts, 3});
@@ -128,6 +132,7 @@ AvatarModel::AvatarModel(const std::string& model_dir,
                 jointShapeReg.col(i).data(), 3, n_joints);
             jointsOut.noalias() = keyVertsIn * jointRegressor;
         }
+        std::cout<<useJointShapeRegressor<<std::endl;
     } else {
         std::cerr << "WARNING: Using deprecated ad-hoc SMPL model format; "
                      "please download SMPL .npz model and place it at "
@@ -294,7 +299,7 @@ AvatarModel::AvatarModel(const std::string& model_dir,
     for (size_t i = 0; i < assignedJoints.size(); ++i) {
         totalAssignments += assignedJoints[i].size();
     }
-
+    std::cout<<"#####\n";
     // Maybe load pose prior
     // posePrior.load(posePriorPath.string());
 }

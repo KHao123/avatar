@@ -20,7 +20,7 @@ AvatarModel::AvatarModel(const std::string& model_dir,
                          ? util::resolveRootPath("data/avatar-model")
                          : model_dir;
     // path npzPath = modelPath / "model.npz";
-    // path npzPath = "/Users/chenkanghao/workspace/compare/smplxpp/data/models/smpl/SMPL_NEUTRAL.npz";
+    // path npzPath = "/Users/chenkanghao/workspace/compare/smplxpp/data/models/smpl/SMPL_MALE.npz";
     path npzPath = "/Users/chenkanghao/workspace/compare/smplxpp/data/models/smplx/SMPLX_MALE.npz";
     // path posePriorPath = modelPath / "pose_prior.txt";
     // path posePriorPath = "";

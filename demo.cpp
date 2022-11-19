@@ -132,14 +132,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    ark::RTree rtree(rtreePath);
+    // ark::RTree rtree(rtreePath);
 
     ark::AvatarModel avaModel;
     // std::cout<<"#####2\n";
     ark::Avatar ava(avaModel);
     // std::cout<<"#####3\n";
-    ark::AvatarOptimizer avaOpt(ava, intrin, background.size(), rtree.numParts,
-                                rtree.partMap);
+    ark::AvatarOptimizer avaOpt(ava, intrin, background.size());
     // std::cout<<"#####4\n";
     // std::cout << ava.model.numJoints() << std::endl;
     // std::cout << ava.model.numPoints() << std::endl;
@@ -200,74 +199,74 @@ int main(int argc, char** argv) {
         auto ccstart = std::chrono::high_resolution_clock::now();
         BEGIN_PROFILE;
         cv::Mat sub =
-            bgsub.run(image, rtreePath.empty() ? &compsBySize : nullptr);
+            bgsub.run(image, &compsBySize);
         PROFILE(BG Subtraction);
 
         cv::Mat vis(sub.size(), CV_8UC3);
-        for (int r = bgsub.topLeft.y; r <= bgsub.botRight.y; ++r) {
-            const auto* inptr = sub.ptr<uint8_t>(r);
-            auto* dptr = depth.ptr<float>(r);
-            for (int c = bgsub.topLeft.x; c <= bgsub.botRight.x; ++c) {
-                if (inptr[c] >= 254) {
-                    dptr[c] = 0.0f;
-                }
-            }
-        }
-        PROFILE(Apply foreground mask to depth);
+        // for (int r = bgsub.topLeft.y; r <= bgsub.botRight.y; ++r) {
+        //     const auto* inptr = sub.ptr<uint8_t>(r);
+        //     auto* dptr = depth.ptr<float>(r);
+        //     for (int c = bgsub.topLeft.x; c <= bgsub.botRight.x; ++c) {
+        //         if (inptr[c] >= 254) {
+        //             dptr[c] = 0.0f;
+        //         }
+        //     }
+        // }
+        // PROFILE(Apply foreground mask to depth);
 
-        if (rtreePath.size()) {
+        if (true) {
             vis.setTo(cv::Vec3b(0, 0, 0));
-            cv::Mat result =
-                rtree.predictBest(depth, std::thread::hardware_concurrency(), 2,
-                                  bgsub.topLeft, bgsub.botRight);
-            PROFILE(RTree inference);
-            rtree.postProcess(result, comPre, 2,
-                              std::thread::hardware_concurrency(),
-                              bgsub.topLeft, bgsub.botRight);
-            PROFILE(RTree postproc);
+            // cv::Mat result =
+            //     rtree.predictBest(depth, std::thread::hardware_concurrency(), 2,
+            //                       bgsub.topLeft, bgsub.botRight);
+            // PROFILE(RTree inference);
+            // rtree.postProcess(result, comPre, 2,
+            //                   std::thread::hardware_concurrency(),
+            //                   bgsub.topLeft, bgsub.botRight);
+            // PROFILE(RTree postproc);
             if (rtreeOnly) {
                 for (int r = bgsub.topLeft.y; r <= bgsub.botRight.y; ++r) {
-                    auto* inPtr = result.ptr<uint8_t>(r);
+                    // auto* inPtr = result.ptr<uint8_t>(r);
                     auto* visualPtr = vis.ptr<cv::Vec3b>(r);
                     for (int c = bgsub.topLeft.x; c <= bgsub.botRight.x; ++c) {
-                        if (inPtr[c] == 255) continue;
-                        visualPtr[c] = ark::util::paletteColor(inPtr[c], true);
+                        // if (inPtr[c] == 255) continue;
+                        // visualPtr[c] = ark::util::paletteColor(inPtr[c], true);
                     }
                 }
             } else {
                 size_t cnz = 0;
                 for (int r = bgsub.topLeft.y; r <= bgsub.botRight.y;
                      r += interval) {
-                    auto* partptr = result.ptr<uint8_t>(r);
+                    // auto* partptr = result.ptr<uint8_t>(r);
                     for (int c = bgsub.topLeft.x; c <= bgsub.botRight.x;
                          c += interval) {
-                        if (partptr[c] == 255) continue;
+                        // if (partptr[c] == 255) continue;
                         ++cnz;
                     }
                 }
-                if (cnz >= reinitCnz / (interval * interval)) {
+                if (true) {
                     ark::CloudType dataCloud(3, cnz);
-                    Eigen::VectorXi dataPartLabels(cnz);
+                    // Eigen::VectorXi dataPartLabels(cnz);
                     size_t i = 0;
                     for (int r = bgsub.topLeft.y; r <= bgsub.botRight.y;
                          r += interval) {
                         auto* ptr = image.ptr<cv::Vec3f>(r);
-                        auto* partptr = result.ptr<uint8_t>(r);
+                        // auto* partptr = result.ptr<uint8_t>(r);
                         for (int c = bgsub.topLeft.x; c <= bgsub.botRight.x;
                              c += interval) {
-                            if (partptr[c] == 255) continue;
-                            if (partptr[c] >= rtree.numParts) {
-                                std::cerr
-                                    << "FATAL: RTree body part prediction "
-                                    << (int)partptr[c]
-                                    << " is invalid, since there are only "
-                                    << rtree.numParts << " body parts\n";
-                                std::exit(1);
-                            }
+                            // if (partptr[c] == 255) continue;
+                            // if (partptr[c] >= rtree.numParts) {
+                            //     std::cerr
+                            //         << "FATAL: RTree body part prediction "
+                            //         << (int)partptr[c]
+                            //         << " is invalid, since there are only "
+                            //         << rtree.numParts << " body parts\n";
+                            //     std::exit(1);
+                            // }
                             dataCloud(0, i) = ptr[c][0];
                             dataCloud(1, i) = -ptr[c][1];
                             dataCloud(2, i) = ptr[c][2];
-                            dataPartLabels(i) = partptr[c];
+                            // dataPartLabels(i) = partptr[c];
                             ++i;
                         }
                     }
@@ -282,12 +281,12 @@ int main(int argc, char** argv) {
                         ava.r[0] =
                             Eigen::AngleAxisd(M_PI, Eigen::Vector3d(0, 1, 0))
                                 .toRotationMatrix();
-                        reinit = false;
+                        // reinit = false;
                         ava.update();
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);
                     }
-                    avaOpt.optimize(dataCloud, dataPartLabels, icpIters,
+                    avaOpt.optimize(icpIters,
                                     std::thread::hardware_concurrency());
                     PROFILE(Optimize(Total));
                     printf(

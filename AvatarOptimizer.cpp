@@ -606,42 +606,42 @@ struct AvatarCostFunctorCache {
 
 /** Ceres analytic derivative cost function for ICP error.
  *  Works for pose parameters only. */
-struct AvatarICPCostFunctor : ceres::CostFunction {
-    AvatarICPCostFunctor(
-        AvatarEvaluationCommonData<AvatarCostFunctorCache> &common_data,
-        size_t cache_id, const CloudType &data_cloud, int data_point_id)
-        : commonData(common_data),
-          cacheId(cache_id),
-          dataCloud(data_cloud),
-          dataPointId(data_point_id) {
-        set_num_residuals(3);
-        auto &cache = common_data.caches[cache_id];
+// struct AvatarICPCostFunctor : ceres::CostFunction {
+//     AvatarICPCostFunctor(
+//         AvatarEvaluationCommonData<AvatarCostFunctorCache> &common_data,
+//         size_t cache_id, const CloudType &data_cloud, int data_point_id)
+//         : commonData(common_data),
+//           cacheId(cache_id),
+//           dataCloud(data_cloud),
+//           dataPointId(data_point_id) {
+//         set_num_residuals(3);
+//         auto &cache = common_data.caches[cache_id];
 
-        std::vector<int> *paramBlockSizes = mutable_parameter_block_sizes();
-        paramBlockSizes->push_back(3);  // Root position
-        for (size_t i = 0; i < cache.commonData.ancestor[cache.pointId].size();
-             ++i) {
-            paramBlockSizes->push_back(
-                4);  // Add rotation block for each ancestor
-        }
-        if (commonData.shapeEnabled)
-            paramBlockSizes->push_back(
-                cache.ava.model.numShapeKeys());  // Shape key weights?
-    }
+//         std::vector<int> *paramBlockSizes = mutable_parameter_block_sizes();
+//         paramBlockSizes->push_back(3);  // Root position
+//         for (size_t i = 0; i < cache.commonData.ancestor[cache.pointId].size();
+//              ++i) {
+//             paramBlockSizes->push_back(
+//                 4);  // Add rotation block for each ancestor
+//         }
+//         if (commonData.shapeEnabled)
+//             paramBlockSizes->push_back(
+//                 cache.ava.model.numShapeKeys());  // Shape key weights?
+//     }
 
-    bool Evaluate(double const *const *parameters, double *residuals,
-                  double **jacobians) const final {
-        if (!commonData.caches[cacheId].getICPJacobians(residuals, jacobians))
-            return false;
-        Eigen::Map<Eigen::Vector3d> resid(residuals);
-        resid -= dataCloud.col(dataPointId);
-        return true;
-    }
-    const CloudType &dataCloud;
-    int dataPointId;
-    size_t cacheId;
-    AvatarEvaluationCommonData<AvatarCostFunctorCache> &commonData;
-};
+//     bool Evaluate(double const *const *parameters, double *residuals,
+//                   double **jacobians) const final {
+//         if (!commonData.caches[cacheId].getICPJacobians(residuals, jacobians))
+//             return false;
+//         Eigen::Map<Eigen::Vector3d> resid(residuals);
+//         resid -= dataCloud.col(dataPointId);
+//         return true;
+//     }
+//     const CloudType &dataCloud;
+//     int dataPointId;
+//     size_t cacheId;
+//     AvatarEvaluationCommonData<AvatarCostFunctorCache> &commonData;
+// };
 
 /** Ceres analytic derivative cost function for pose prior error */
 // struct AvatarPosePriorCostFunctor : ceres::CostFunction {
@@ -729,527 +729,524 @@ struct AvatarShapePriorCostFunctor : ceres::CostFunction {
 /** Auto diff cost function w/ derivative for Ceres
  *  (Extremely poorly optimized, used for checking correctness of analytic
  * derivative) */
-struct AvatarICPAutoDiffCostFunctor {
-    AvatarICPAutoDiffCostFunctor(
-        AvatarEvaluationCommonData<AvatarCostFunctorCache> &common_data,
-        size_t cache_id, const CloudType &data_cloud, int data_point_id)
-        : commonData(common_data),
-          cacheId(cache_id),
-          dataCloud(data_cloud),
-          dataPointId(data_point_id) {
-        pointId = commonData.caches[cacheId].pointId;
-    }
-    template <class T>
-    bool operator()(T const *const *params, T *residual) const {
-        using VecMap = Eigen::Map<Eigen::Matrix<T, 3, 1>>;
-        using ConstVecMap = Eigen::Map<const Eigen::Matrix<T, 3, 1>>;
-        using ConstQuatMap = Eigen::Map<const Eigen::Quaternion<T>>;
+// struct AvatarICPAutoDiffCostFunctor {
+//     AvatarICPAutoDiffCostFunctor(
+//         AvatarEvaluationCommonData<AvatarCostFunctorCache> &common_data,
+//         size_t cache_id, const CloudType &data_cloud, int data_point_id)
+//         : commonData(common_data),
+//           cacheId(cache_id),
+//           dataCloud(data_cloud),
+//           dataPointId(data_point_id) {
+//         pointId = commonData.caches[cacheId].pointId;
+//     }
+//     template <class T>
+//     bool operator()(T const *const *params, T *residual) const {
+//         using VecMap = Eigen::Map<Eigen::Matrix<T, 3, 1>>;
+//         using ConstVecMap = Eigen::Map<const Eigen::Matrix<T, 3, 1>>;
+//         using ConstQuatMap = Eigen::Map<const Eigen::Quaternion<T>>;
 
-        Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(
-            3, commonData.ava.model.numPoints());
-        Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> cloudVec(
-            cloud.data(), cloud.rows() * cloud.cols());
+//         Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(
+//             3, commonData.ava.model.numPoints());
+//         Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> cloudVec(
+//             cloud.data(), cloud.rows() * cloud.cols());
 
-        if (commonData.shapeEnabled) {
-            Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
-                params[commonData.ava.model.numJoints() + 1],
-                commonData.ava.model.numShapeKeys(), 1);
-            cloudVec.noalias() =
-                commonData.ava.model.keyClouds.cast<T>() * wMap +
-                commonData.ava.model.baseCloud;
-        } else {
-            cloudVec.noalias() = commonData.ava.model.keyClouds.cast<T>() *
-                                     commonData.ava.w.cast<T>() +
-                                 commonData.ava.model.baseCloud;
-        }
+//         if (commonData.shapeEnabled) {
+//             Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
+//                 params[commonData.ava.model.numJoints() + 1],
+//                 commonData.ava.model.numShapeKeys(), 1);
+//             cloudVec.noalias() =
+//                 commonData.ava.model.keyClouds.cast<T>() * wMap +
+//                 commonData.ava.model.baseCloud;
+//         } else {
+//             cloudVec.noalias() = commonData.ava.model.keyClouds.cast<T>() *
+//                                      commonData.ava.w.cast<T>() +
+//                                  commonData.ava.model.baseCloud;
+//         }
 
-        Eigen::Matrix<T, 3, Eigen::Dynamic> jointPos =
-            cloud * commonData.ava.model.jointRegressor.cast<T>();
+//         Eigen::Matrix<T, 3, Eigen::Dynamic> jointPos =
+//             cloud * commonData.ava.model.jointRegressor.cast<T>();
 
-        if (commonData.ava.model.useJointShapeRegressor) {
-            jointPos.resize(3, commonData.ava.model.numJoints());
-            Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> jointPosVec(
-                jointPos.data(), 3 * commonData.ava.model.numJoints());
+//         if (commonData.ava.model.useJointShapeRegressor) {
+//             jointPos.resize(3, commonData.ava.model.numJoints());
+//             Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> jointPosVec(
+//                 jointPos.data(), 3 * commonData.ava.model.numJoints());
 
-            if (commonData.shapeEnabled) {
-                Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
-                    params[commonData.ava.model.numJoints() + 1],
-                    commonData.ava.model.numShapeKeys(), 1);
-                jointPosVec.noalias() =
-                    commonData.ava.model.jointShapeRegBase.cast<T>() +
-                    commonData.ava.model.jointShapeReg.cast<T>() * wMap;
-            } else {
-                jointPosVec.noalias() =
-                    commonData.ava.model.jointShapeRegBase.cast<T>() +
-                    commonData.ava.model.jointShapeReg.cast<T>() *
-                        commonData.ava.w.cast<T>();
-            }
-        } else {
-            jointPos.noalias() =
-                cloud * commonData.ava.model.jointRegressor.cast<T>();
-        }
+//             if (commonData.shapeEnabled) {
+//                 Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
+//                     params[commonData.ava.model.numJoints() + 1],
+//                     commonData.ava.model.numShapeKeys(), 1);
+//                 jointPosVec.noalias() =
+//                     commonData.ava.model.jointShapeRegBase.cast<T>() +
+//                     commonData.ava.model.jointShapeReg.cast<T>() * wMap;
+//             } else {
+//                 jointPosVec.noalias() =
+//                     commonData.ava.model.jointShapeRegBase.cast<T>() +
+//                     commonData.ava.model.jointShapeReg.cast<T>() *
+//                         commonData.ava.w.cast<T>();
+//             }
+//         } else {
+//             jointPos.noalias() =
+//                 cloud * commonData.ava.model.jointRegressor.cast<T>();
+//         }
 
-        Eigen::Matrix<T, 3, 1> offset = jointPos.col(0);
-        cloud.colwise() -= offset;
-        jointPos.colwise() -= offset;
+//         Eigen::Matrix<T, 3, 1> offset = jointPos.col(0);
+//         cloud.colwise() -= offset;
+//         jointPos.colwise() -= offset;
 
-        VecMap resid(residual);
-        resid.setZero();
-        ConstVecMap rootPos(params[0]);
-        for (auto &assign : commonData.ava.model.assignedJoints[pointId]) {
-            Eigen::Matrix<T, 3, 1> vec =
-                (cloud.col(pointId) - jointPos.col(assign.second))
-                    .template cast<T>();
-            for (int p = assign.second; p != -1;
-                 p = commonData.ava.model.parent[p]) {
-                vec = ConstQuatMap(params[p + 1]).toRotationMatrix() * vec;
-                // Do not add if root joint since we want to add the rootPos
-                // instead in autodiff case
-                if (p)
-                    vec.noalias() +=
-                        jointPos.col(p) -
-                        jointPos.col(commonData.ava.model.parent[p]);
-            }
-            resid.noalias() += assign.first * vec;
-        }
-        resid.noalias() += rootPos;
-        resid.noalias() -= dataCloud.col(dataPointId);
-        return true;
-    }
+//         VecMap resid(residual);
+//         resid.setZero();
+//         ConstVecMap rootPos(params[0]);
+//         for (auto &assign : commonData.ava.model.assignedJoints[pointId]) {
+//             Eigen::Matrix<T, 3, 1> vec =
+//                 (cloud.col(pointId) - jointPos.col(assign.second))
+//                     .template cast<T>();
+//             for (int p = assign.second; p != -1;
+//                  p = commonData.ava.model.parent[p]) {
+//                 vec = ConstQuatMap(params[p + 1]).toRotationMatrix() * vec;
+//                 // Do not add if root joint since we want to add the rootPos
+//                 // instead in autodiff case
+//                 if (p)
+//                     vec.noalias() +=
+//                         jointPos.col(p) -
+//                         jointPos.col(commonData.ava.model.parent[p]);
+//             }
+//             resid.noalias() += assign.first * vec;
+//         }
+//         resid.noalias() += rootPos;
+//         resid.noalias() -= dataCloud.col(dataPointId);
+//         return true;
+//     }
 
-    const CloudType &dataCloud;
-    int dataPointId, pointId;
-    size_t cacheId;
-    AvatarEvaluationCommonData<AvatarCostFunctorCache> &commonData;
-};
+//     const CloudType &dataCloud;
+//     int dataPointId, pointId;
+//     size_t cacheId;
+//     AvatarEvaluationCommonData<AvatarCostFunctorCache> &commonData;
+// };
 #endif  // TEST_COMPARE_AUTO_DIFF
 
 typedef nanoflann::KDTreeEigenColMajorMatrixAdaptor<CloudType, 3,
                                                     nanoflann::metric_L2_Simple>
     KdTree;
-void findNN(const CloudType &data_cloud,
-            const Eigen::VectorXi &data_part_labels,
-            const std::vector<Eigen::VectorXi> &data_part_indices,
-            const CloudType &model_cloud,
-            const Eigen::VectorXi &model_part_labels,
-            const std::vector<Eigen::VectorXi> &model_part_indices,
-            std::vector<CloudType> &model_part_clouds,
-            std::vector<bool> &point_visible,
-            std::vector<std::vector<int>> &correspondences,
-            std::vector<std::unique_ptr<KdTree>> &part_kd, int nn_step,
-            int num_threads, bool invert = false) {
-    if (invert) {
-        size_t index;
-        double dist;
-        nanoflann::KNNResultSet<double> resultSet(1);
-        // match each data point to a model point
-        typedef nanoflann::KDTreeEigenColMajorMatrixAdaptor<
-            CloudType, 3, nanoflann::metric_L2_Simple>
-            KdTree;
+// void findNN(const CloudType &data_cloud,
+//             const Eigen::VectorXi &data_part_labels,
+//             const std::vector<Eigen::VectorXi> &data_part_indices,
+//             const CloudType &model_cloud,
+//             const Eigen::VectorXi &model_part_labels,
+//             const std::vector<Eigen::VectorXi> &model_part_indices,
+//             std::vector<CloudType> &model_part_clouds,
+//             std::vector<bool> &point_visible,
+//             std::vector<std::vector<int>> &correspondences,
+//             std::vector<std::unique_ptr<KdTree>> &part_kd, int nn_step,
+//             int num_threads, bool invert = false) {
+//     if (invert) {
+//         size_t index;
+//         double dist;
+//         nanoflann::KNNResultSet<double> resultSet(1);
+//         // match each data point to a model point
+//         typedef nanoflann::KDTreeEigenColMajorMatrixAdaptor<
+//             CloudType, 3, nanoflann::metric_L2_Simple>
+//             KdTree;
 
-        const size_t numParts = model_part_indices.size();
-        std::vector<KdTree *> modelPartKD(numParts);
-        std::vector<std::vector<int>> newModelPartIndices(numParts);
-        {
-            std::atomic<int> part(0);
-            auto worker = [&]() {
-                int i = 0;
-                while (true) {
-                    i = part++;
-                    if (i >= numParts) break;
-                    const auto &indices = model_part_indices[i];
-                    int cnt = 0;
-                    for (int j = 0; j < indices.rows(); ++j) {
-                        int k = indices[j];
-                        if (point_visible[k]) ++cnt;
-                    }
-                    auto &partCloud = model_part_clouds[i];
-                    if (cnt == 0) {
-                        modelPartKD[i] = nullptr;
-                        continue;
-                    }
-                    partCloud.resize(3, cnt);
-                    cnt = 0;
-                    for (int j = 0; j < indices.rows(); ++j) {
-                        int k = indices[j];
-                        if (!point_visible[k]) continue;
-                        partCloud.col(cnt++).noalias() = model_cloud.col(k);
-                        newModelPartIndices[i].push_back(k);
-                    }
-                    modelPartKD[i] = new KdTree(model_part_clouds[i], 10);
-                    modelPartKD[i]->index->buildIndex();
-                }
-            };
-            std::vector<std::thread> thds;
-            for (int i = 0; i < num_threads; ++i) {
-                thds.emplace_back(worker);
-            }
-            for (int i = 0; i < num_threads; ++i) {
-                thds[i].join();
-            }
-        }
+//         const size_t numParts = model_part_indices.size();
+//         std::vector<KdTree *> modelPartKD(numParts);
+//         std::vector<std::vector<int>> newModelPartIndices(numParts);
+//         {
+//             std::atomic<int> part(0);
+//             auto worker = [&]() {
+//                 int i = 0;
+//                 while (true) {
+//                     i = part++;
+//                     if (i >= numParts) break;
+//                     const auto &indices = model_part_indices[i];
+//                     int cnt = 0;
+//                     for (int j = 0; j < indices.rows(); ++j) {
+//                         int k = indices[j];
+//                         if (point_visible[k]) ++cnt;
+//                     }
+//                     auto &partCloud = model_part_clouds[i];
+//                     if (cnt == 0) {
+//                         modelPartKD[i] = nullptr;
+//                         continue;
+//                     }
+//                     partCloud.resize(3, cnt);
+//                     cnt = 0;
+//                     for (int j = 0; j < indices.rows(); ++j) {
+//                         int k = indices[j];
+//                         if (!point_visible[k]) continue;
+//                         partCloud.col(cnt++).noalias() = model_cloud.col(k);
+//                         newModelPartIndices[i].push_back(k);
+//                     }
+//                     modelPartKD[i] = new KdTree(model_part_clouds[i], 10);
+//                     modelPartKD[i]->index->buildIndex();
+//                 }
+//             };
+//             std::vector<std::thread> thds;
+//             for (int i = 0; i < num_threads; ++i) {
+//                 thds.emplace_back(worker);
+//             }
+//             for (int i = 0; i < num_threads; ++i) {
+//                 thds[i].join();
+//             }
+//         }
 
-        correspondences.resize(model_cloud.cols());
-        for (int i = 0; i < model_cloud.cols(); ++i) {
-            correspondences[i].clear();
-        }
-        for (int i = 0; i < data_cloud.cols(); ++i) {
-            resultSet.init(&index, &dist);
-            const int partId = data_part_labels[i];
-            if (modelPartKD[partId] == nullptr) continue;
-            modelPartKD[partId]->index->findNeighbors(
-                resultSet, data_cloud.data() + i * 3,
-                nanoflann::SearchParams(10));
-            correspondences[newModelPartIndices[partId][index]].push_back(i);
-        }
-        for (int i = 0; i < numParts; ++i) {
-            delete modelPartKD[i];
-        }
-        // const int MAX_CORRES_PER_POINT = 1;
-        // for (int i = 0; i < model_cloud.cols(); ++i) {
-        //     if (correspondences[i].size() > MAX_CORRES_PER_POINT) {
-        //         //std::cerr << correspondences[i].size() << "SZ\n";
-        //         for (int j = 0; j < MAX_CORRES_PER_POINT; ++j) {
-        //             int r = random_util::randint<int>(j,
-        //             correspondences[i].size()-1);
-        //             std::swap(correspondences[i][j], correspondences[i][r]);
-        //         }
-        //         correspondences[i].resize(MAX_CORRES_PER_POINT);
-        //     }
-        // }
+//         correspondences.resize(model_cloud.cols());
+//         for (int i = 0; i < model_cloud.cols(); ++i) {
+//             correspondences[i].clear();
+//         }
+//         for (int i = 0; i < data_cloud.cols(); ++i) {
+//             resultSet.init(&index, &dist);
+//             const int partId = data_part_labels[i];
+//             if (modelPartKD[partId] == nullptr) continue;
+//             modelPartKD[partId]->index->findNeighbors(
+//                 resultSet, data_cloud.data() + i * 3,
+//                 nanoflann::SearchParams(10));
+//             correspondences[newModelPartIndices[partId][index]].push_back(i);
+//         }
+//         for (int i = 0; i < numParts; ++i) {
+//             delete modelPartKD[i];
+//         }
+//         // const int MAX_CORRES_PER_POINT = 1;
+//         // for (int i = 0; i < model_cloud.cols(); ++i) {
+//         //     if (correspondences[i].size() > MAX_CORRES_PER_POINT) {
+//         //         //std::cerr << correspondences[i].size() << "SZ\n";
+//         //         for (int j = 0; j < MAX_CORRES_PER_POINT; ++j) {
+//         //             int r = random_util::randint<int>(j,
+//         //             correspondences[i].size()-1);
+//         //             std::swap(correspondences[i][j], correspondences[i][r]);
+//         //         }
+//         //         correspondences[i].resize(MAX_CORRES_PER_POINT);
+//         //     }
+//         // }
 
-    } else {
-        size_t index;
-        double dist;
-        nanoflann::KNNResultSet<double> resultSet(1);
+//     } else {
+//         size_t index;
+//         double dist;
+//         nanoflann::KNNResultSet<double> resultSet(1);
 
-        // match each model point to a data point
-        correspondences.resize(model_cloud.cols());
-        for (int i = 0; i < model_cloud.cols(); ++i) {
-            correspondences[i].clear();
-        }
-        Eigen::VectorXi perPart(part_kd.size());
-        perPart.setZero();
-        for (int i = 0; i < model_cloud.cols(); i += nn_step) {
-            if (!point_visible[i]) continue;
-            resultSet.init(&index, &dist);
-            int partId = model_part_labels[i];
-            auto *kd_tree = part_kd[partId].get();
-            if (kd_tree) {
-                kd_tree->index->findNeighbors(resultSet,
-                                              model_cloud.data() + i * 3,
-                                              nanoflann::SearchParams(10));
-                correspondences[i].push_back(data_part_indices[partId][index]);
-                ++perPart[partId];
-            }
-        }
-        for (int i = 0; i < perPart.rows(); ++i) {
-            std::cout << perPart(i) << " ";
-        }
-        std::cout << "!!\n";
+//         // match each model point to a data point
+//         correspondences.resize(model_cloud.cols());
+//         for (int i = 0; i < model_cloud.cols(); ++i) {
+//             correspondences[i].clear();
+//         }
+//         Eigen::VectorXi perPart(part_kd.size());
+//         perPart.setZero();
+//         for (int i = 0; i < model_cloud.cols(); i += nn_step) {
+//             if (!point_visible[i]) continue;
+//             resultSet.init(&index, &dist);
+//             int partId = model_part_labels[i];
+//             auto *kd_tree = part_kd[partId].get();
+//             if (kd_tree) {
+//                 kd_tree->index->findNeighbors(resultSet,
+//                                               model_cloud.data() + i * 3,
+//                                               nanoflann::SearchParams(10));
+//                 correspondences[i].push_back(data_part_indices[partId][index]);
+//                 ++perPart[partId];
+//             }
+//         }
+//         for (int i = 0; i < perPart.rows(); ++i) {
+//             std::cout << perPart(i) << " ";
+//         }
+//         std::cout << "!!\n";
 
-        // if (ownTree) {
-        //     delete kd_tree;
-        // }
-        /*
-           const int MAX_CORRES_PER_POINT = 200;
-           for (int i = 0; i < model_cloud.cols(); ++i) {
-           if (correspondences[i].size() > MAX_CORRES_PER_POINT) {
-        //std::cerr << correspondences[i].size() << "SZ\n";
-        for (int j = 0; j < MAX_CORRES_PER_POINT; ++j) {
-        int r = random_util::randint<int>(j, correspondences[i].size()-1);
-        std::swap(correspondences[i][j], correspondences[i][r]);
-        }
-        correspondences[i].resize(MAX_CORRES_PER_POINT);
-        }
-        }
-        */
-    }
-}
+//         // if (ownTree) {
+//         //     delete kd_tree;
+//         // }
+//         /*
+//            const int MAX_CORRES_PER_POINT = 200;
+//            for (int i = 0; i < model_cloud.cols(); ++i) {
+//            if (correspondences[i].size() > MAX_CORRES_PER_POINT) {
+//         //std::cerr << correspondences[i].size() << "SZ\n";
+//         for (int j = 0; j < MAX_CORRES_PER_POINT; ++j) {
+//         int r = random_util::randint<int>(j, correspondences[i].size()-1);
+//         std::swap(correspondences[i][j], correspondences[i][r]);
+//         }
+//         correspondences[i].resize(MAX_CORRES_PER_POINT);
+//         }
+//         }
+//         */
+//     }
+// }
 
-#ifdef PCL_DEBUG_VISUALIZE
-void debugVisualize(
-    const pcl::visualization::PCLVisualizer::Ptr &viewer,
-    const CloudType &data_cloud, std::vector<std::vector<int>> correspondences,
-    const std::vector<bool> &point_visible,
-    AvatarEvaluationCommonData<AvatarCostFunctorCache> &common) {
-    auto modelPclCloud = pcl::PointCloud<pcl::PointXYZRGBA>::Ptr(
-        new pcl::PointCloud<pcl::PointXYZRGBA>());
-    auto dataPclCloud = pcl::PointCloud<pcl::PointXYZRGBA>::Ptr(
-        new pcl::PointCloud<pcl::PointXYZRGBA>());
-    // auto matchedModelPointsCloud =
-    // pcl::PointCloud<pcl::PointXYZRGBA>::Ptr(new
-    // pcl::PointCloud<pcl::PointXYZRGBA>());
-    modelPclCloud->reserve(common.ava.cloud.cols());
-    for (int i = 0; i < common.ava.cloud.cols(); ++i) {
-        pcl::PointXYZRGBA pt;
-        pt.getVector3fMap() = common.ava.cloud.col(i).cast<float>();
-        if (!point_visible[i]) {
-            // pt.r = pt.g = pt.b = 100;
-            continue;
-        } else {
-            pt.r = 255;
-            pt.g = 0;
-            pt.b = 0;
-        }
-        pt.a = 255;
-        modelPclCloud->push_back(std::move(pt));
-    }
-    dataPclCloud->reserve(data_cloud.cols());
-    for (int i = 0; i < data_cloud.cols(); ++i) {
-        pcl::PointXYZRGBA pt;
-        pt.getVector3fMap() = data_cloud.col(i).cast<float>();
-        pt.r = 100;
-        pt.g = 100;
-        pt.b = 100;
-        pt.a = 200;
-        dataPclCloud->push_back(std::move(pt));
-    }
-    // matchedModelPointsCloud->reserve(common.caches.size());
-    // common.PrepareForEvaluation(true, true);
-    // for (auto& cache : common.caches) {
-    //     cache.updateData(false);
-    //     pcl::PointXYZRGBA pt;
-    //     pt.getVector3fMap() = cache.resid.cast<float>();
-    //     pt.r = 0;
-    //     pt.g = 255;
-    //     pt.b = 0;
-    //     pt.a = 255;
-    //     matchedModelPointsCloud->push_back(std::move(pt));
-    // }
+// #ifdef PCL_DEBUG_VISUALIZE
+// void debugVisualize(
+//     const pcl::visualization::PCLVisualizer::Ptr &viewer,
+//     const CloudType &data_cloud, std::vector<std::vector<int>> correspondences,
+//     const std::vector<bool> &point_visible,
+//     AvatarEvaluationCommonData<AvatarCostFunctorCache> &common) {
+//     auto modelPclCloud = pcl::PointCloud<pcl::PointXYZRGBA>::Ptr(
+//         new pcl::PointCloud<pcl::PointXYZRGBA>());
+//     auto dataPclCloud = pcl::PointCloud<pcl::PointXYZRGBA>::Ptr(
+//         new pcl::PointCloud<pcl::PointXYZRGBA>());
+//     // auto matchedModelPointsCloud =
+//     // pcl::PointCloud<pcl::PointXYZRGBA>::Ptr(new
+//     // pcl::PointCloud<pcl::PointXYZRGBA>());
+//     modelPclCloud->reserve(common.ava.cloud.cols());
+//     for (int i = 0; i < common.ava.cloud.cols(); ++i) {
+//         pcl::PointXYZRGBA pt;
+//         pt.getVector3fMap() = common.ava.cloud.col(i).cast<float>();
+//         if (!point_visible[i]) {
+//             // pt.r = pt.g = pt.b = 100;
+//             continue;
+//         } else {
+//             pt.r = 255;
+//             pt.g = 0;
+//             pt.b = 0;
+//         }
+//         pt.a = 255;
+//         modelPclCloud->push_back(std::move(pt));
+//     }
+//     dataPclCloud->reserve(data_cloud.cols());
+//     for (int i = 0; i < data_cloud.cols(); ++i) {
+//         pcl::PointXYZRGBA pt;
+//         pt.getVector3fMap() = data_cloud.col(i).cast<float>();
+//         pt.r = 100;
+//         pt.g = 100;
+//         pt.b = 100;
+//         pt.a = 200;
+//         dataPclCloud->push_back(std::move(pt));
+//     }
+//     // matchedModelPointsCloud->reserve(common.caches.size());
+//     // common.PrepareForEvaluation(true, true);
+//     // for (auto& cache : common.caches) {
+//     //     cache.updateData(false);
+//     //     pcl::PointXYZRGBA pt;
+//     //     pt.getVector3fMap() = cache.resid.cast<float>();
+//     //     pt.r = 0;
+//     //     pt.g = 255;
+//     //     pt.b = 0;
+//     //     pt.a = 255;
+//     //     matchedModelPointsCloud->push_back(std::move(pt));
+//     // }
 
-    viewer->setBackgroundColor(0, 0, 0);
-    viewer->removePointCloud("cloud");
-    viewer->removePointCloud("cloudData");
-    viewer->removePointCloud("cachesCloud");
-    viewer->removeAllShapes();
-    viewer->addPointCloud(modelPclCloud, "cloud", 0);
-    viewer->addPointCloud(dataPclCloud, "cloudData", 0);
-    // viewer->addPointCloud(matchedModelPointsCloud, "cachesCloud", 0);
-    /*
-    for (int i = 0; i < common.ava.model.numJoints(); ++i) {
-        pcl::PointXYZRGBA curr;
-        curr.x = common.jointPosInit(0, i);
-        curr.y = common.jointPosInit(1, i);
-        curr.z = common.jointPosInit(2, i);
-        //std::cerr << "Joint:" << joints[i]->name << ":" << curr.x << "," <<
-    curr.y << "," << curr.z << "\n"; cv::Vec3f colorf(0.f, 0.f, 1.0f);
-    std::string jointName = "avatarJoint" + std::to_string(i);
-    viewer->removeShape(jointName, 0); viewer->addSphere(curr, 0.02, colorf[0],
-    colorf[1], colorf[2], jointName, 0);
-        // if (joints[i]->parent) {
-        //     p parent = util::toPCLPoint(joints[i]->parent->posTransformed);
-        //     std::string boneName = pcl_prefix + "avatarBone" +
-    std::to_string(i);
-        //     viewer->removeShape(boneName, viewport);
-        //     viewer->addLine(curr, parent, colorf[2], colorf[1], colorf[0],
-    boneName, viewport);
-        // }
-    }
-    */
+//     viewer->setBackgroundColor(0, 0, 0);
+//     viewer->removePointCloud("cloud");
+//     viewer->removePointCloud("cloudData");
+//     viewer->removePointCloud("cachesCloud");
+//     viewer->removeAllShapes();
+//     viewer->addPointCloud(modelPclCloud, "cloud", 0);
+//     viewer->addPointCloud(dataPclCloud, "cloudData", 0);
+//     // viewer->addPointCloud(matchedModelPointsCloud, "cachesCloud", 0);
+//     /*
+//     for (int i = 0; i < common.ava.model.numJoints(); ++i) {
+//         pcl::PointXYZRGBA curr;
+//         curr.x = common.jointPosInit(0, i);
+//         curr.y = common.jointPosInit(1, i);
+//         curr.z = common.jointPosInit(2, i);
+//         //std::cerr << "Joint:" << joints[i]->name << ":" << curr.x << "," <<
+//     curr.y << "," << curr.z << "\n"; cv::Vec3f colorf(0.f, 0.f, 1.0f);
+//     std::string jointName = "avatarJoint" + std::to_string(i);
+//     viewer->removeShape(jointName, 0); viewer->addSphere(curr, 0.02, colorf[0],
+//     colorf[1], colorf[2], jointName, 0);
+//         // if (joints[i]->parent) {
+//         //     p parent = util::toPCLPoint(joints[i]->parent->posTransformed);
+//         //     std::string boneName = pcl_prefix + "avatarBone" +
+//     std::to_string(i);
+//         //     viewer->removeShape(boneName, viewport);
+//         //     viewer->addLine(curr, parent, colorf[2], colorf[1], colorf[0],
+//     boneName, viewport);
+//         // }
+//     }
+//     */
 
-    for (size_t i = 0; i < correspondences.size(); ++i) {
-        for (size_t j = 0; j < correspondences[i].size(); ++j) {
-            // if (random_util::uniform(0.0, 1.0) > 0.05) continue;
-            pcl::PointXYZ p1, p2;
-            p1.getVector3fMap() = common.ava.cloud.col(i).cast<float>();
-            p2.getVector3fMap() =
-                data_cloud.col(correspondences[i][j]).cast<float>();
-            std::string name = "nn_line_" + std::to_string(i) + "_" +
-                               std::to_string(correspondences[i][j]);
-            viewer->addLine<pcl::PointXYZ, pcl::PointXYZ>(p2, p1, 0.0, 1.0, 0.0,
-                                                          name, 0);
-        }
-    }
+//     for (size_t i = 0; i < correspondences.size(); ++i) {
+//         for (size_t j = 0; j < correspondences[i].size(); ++j) {
+//             // if (random_util::uniform(0.0, 1.0) > 0.05) continue;
+//             pcl::PointXYZ p1, p2;
+//             p1.getVector3fMap() = common.ava.cloud.col(i).cast<float>();
+//             p2.getVector3fMap() =
+//                 data_cloud.col(correspondences[i][j]).cast<float>();
+//             std::string name = "nn_line_" + std::to_string(i) + "_" +
+//                                std::to_string(correspondences[i][j]);
+//             viewer->addLine<pcl::PointXYZ, pcl::PointXYZ>(p2, p1, 0.0, 1.0, 0.0,
+//                                                           name, 0);
+//         }
+//     }
 
-    viewer->spin();
-}
-#endif
+//     viewer->spin();
+// }
+// #endif
 
-#ifdef TEST_COMPARE_AUTO_DIFF
-/** Given a model point-data point pair, this function checks that autodiff
- * gives the same result as the user-supplied analytic derivatives. Useful for
- * verifying correctness. */
-void testCompareAutoDiff(AvatarOptimizer &opt, const ark::CloudType &data_cloud,
-                         int model_point_id, int data_point_id) {
-    using namespace ceres;
-    std::cerr << "INFO: COMPARING AUTO DIFF\n";
+// #ifdef TEST_COMPARE_AUTO_DIFF
+// /** Given a model point-data point pair, this function checks that autodiff
+//  * gives the same result as the user-supplied analytic derivatives. Useful for
+//  * verifying correctness. */
+// void testCompareAutoDiff(AvatarOptimizer &opt, const ark::CloudType &data_cloud,
+//                          int model_point_id, int data_point_id) {
+//     using namespace ceres;
+//     std::cerr << "INFO: COMPARING AUTO DIFF\n";
 
-    std::cerr << data_cloud.col(data_point_id).transpose() << " DATA POINT\n";
+//     std::cerr << data_cloud.col(data_point_id).transpose() << " DATA POINT\n";
 
-    AvatarEvaluation1ommonData<AvatarCostFunctorCache> common(opt, true);
-    common.scaledBetaShape = opt.betaShape;
-    common.scaledBetaPose = opt.betaPose;
+//     AvatarEvaluation1ommonData<AvatarCostFunctorCache> common(opt, true);
+//     common.scaledBetaShape = opt.betaShape;
+//     common.scaledBetaPose = opt.betaPose;
 
-    std::cerr << common.shapedCloud.col(model_point_id).transpose()
-              << " MODEL POINT, init\n";
-    for (auto &ances : common.ancestor[model_point_id]) {
-        std::cerr << ances.jid << ", p() = " << opt.ava.model.parent[ances.jid]
-                  << "\n";
-        std::cerr << common.jointPosInit.col(ances.jid).transpose() << " t\n";
-        std::cerr << opt.r[ances.jid].w() << ": "
-                  << opt.r[ances.jid].vec().transpose() << " q\n";
-        std::cerr << "\n";
-    }
-    std::cerr << "\n";
+//     std::cerr << common.shapedCloud.col(model_point_id).transpose()
+//               << " MODEL POINT, init\n";
+//     for (auto &ances : common.ancestor[model_point_id]) {
+//         std::cerr << ances.jid << ", p() = " << opt.ava.model.parent[ances.jid]
+//                   << "\n";
+//         std::cerr << common.jointPosInit.col(ances.jid).transpose() << " t\n";
+//         std::cerr << opt.r[ances.jid].w() << ": "
+//                   << opt.r[ances.jid].vec().transpose() << " q\n";
+//         std::cerr << "\n";
+//     }
+//     std::cerr << "\n";
 
-    for (auto &assign : opt.ava.model.assignedJoints[model_point_id]) {
-        std::cerr << assign.first << ":" << assign.second << " ";
-    }
-    std::cerr << "\n";
+//     for (auto &assign : opt.ava.model.assignedJoints[model_point_id]) {
+//         std::cerr << assign.first << ":" << assign.second << " ";
+//     }
+//     std::cerr << "\n";
 
-    common.caches.emplace_back(common, model_point_id);
-    std::cerr << "Created dummy caches\n";
+//     common.caches.emplace_back(common, model_point_id);
+//     std::cerr << "Created dummy caches\n";
 
-    DynamicAutoDiffCostFunction<AvatarICPAutoDiffCostFunctor> *cost_function =
-        new DynamicAutoDiffCostFunction<AvatarICPAutoDiffCostFunctor>(
-            new AvatarICPAutoDiffCostFunctor(common, 0, data_cloud,
-                                             data_point_id));
-    cost_function->AddParameterBlock(3);
-    for (int k = 0; k < opt.ava.model.numJoints(); ++k) {
-        cost_function->AddParameterBlock(4);
-    }
-    if (common.shapeEnabled) {
-        cost_function->AddParameterBlock(opt.ava.model.numShapeKeys());
-    }
-    cost_function->SetNumResiduals(3);
+//     DynamicAutoDiffCostFunction<AvatarICPAutoDiffCostFunctor> *cost_function =
+//         new DynamicAutoDiffCostFunction<AvatarICPAutoDiffCostFunctor>(
+//             new AvatarICPAutoDiffCostFunctor(common, 0, data_cloud,
+//                                              data_point_id));
+//     cost_function->AddParameterBlock(3);
+//     for (int k = 0; k < opt.ava.model.numJoints(); ++k) {
+//         cost_function->AddParameterBlock(4);
+//     }
+//     if (common.shapeEnabled) {
+//         cost_function->AddParameterBlock(opt.ava.model.numShapeKeys());
+//     }
+//     cost_function->SetNumResiduals(3);
 
-    AvatarICPCostFunctor *our_cost_function =
-        new AvatarICPCostFunctor(common, 0, data_cloud, data_point_id);
-    // NULL, pointParams[i]);
+//     AvatarICPCostFunctor *our_cost_function =
+//         new AvatarICPCostFunctor(common, 0, data_cloud, data_point_id);
+//     // NULL, pointParams[i]);
 
-    std::vector<double *> params, fullParams;
-    params.reserve(common.ancestor[model_point_id].size() + 1);
-    params.push_back(common.ava.p.data());
-    for (auto &ances : common.ancestor[model_point_id]) {
-        params.push_back(opt.r[ances.jid].coeffs().data());
-    }
-    fullParams.push_back(common.ava.p.data());
-    for (int i = 0; i < opt.ava.model.numJoints(); ++i) {
-        fullParams.push_back(opt.r[i].coeffs().data());
-    }
+//     std::vector<double *> params, fullParams;
+//     params.reserve(common.ancestor[model_point_id].size() + 1);
+//     params.push_back(common.ava.p.data());
+//     for (auto &ances : common.ancestor[model_point_id]) {
+//         params.push_back(opt.r[ances.jid].coeffs().data());
+//     }
+//     fullParams.push_back(common.ava.p.data());
+//     for (int i = 0; i < opt.ava.model.numJoints(); ++i) {
+//         fullParams.push_back(opt.r[i].coeffs().data());
+//     }
 
-    if (common.shapeEnabled) {
-        params.push_back(common.ava.w.data());
-        fullParams.push_back(common.ava.w.data());
-    }
+//     if (common.shapeEnabled) {
+//         params.push_back(common.ava.w.data());
+//         fullParams.push_back(common.ava.w.data());
+//     }
 
-    double resid[3];
-    double **jaco = new double *[params.size()];
-    jaco[0] = new double[3 * 3];
-    for (int i = 1; i < params.size() - 1; ++i) {
-        jaco[i] = new double[3 * 4];
-    }
-    jaco[params.size() - 1] = new double[3 * opt.ava.model.numShapeKeys()];
-    common.PrepareForEvaluation(true, true);
-    our_cost_function->Evaluate(&params[0], resid, jaco);
-    std::cerr << "Residual ours \n"
-              << resid[0] << " " << resid[1] << " " << resid[2] << "\n";
+//     double resid[3];
+//     double **jaco = new double *[params.size()];
+//     jaco[0] = new double[3 * 3];
+//     for (int i = 1; i < params.size() - 1; ++i) {
+//         jaco[i] = new double[3 * 4];
+//     }
+//     jaco[params.size() - 1] = new double[3 * opt.ava.model.numShapeKeys()];
+//     common.PrepareForEvaluation(true, true);
+//     our_cost_function->Evaluate(&params[0], resid, jaco);
+//     std::cerr << "Residual ours \n"
+//               << resid[0] << " " << resid[1] << " " << resid[2] << "\n";
 
-    double **jaco2 = new double *[fullParams.size()];
-    jaco2[0] = new double[3 * 3];
-    for (int i = 1; i < fullParams.size() - 1; ++i) {
-        jaco2[i] = new double[3 * 4];
-    }
-    jaco2[fullParams.size() - 1] = new double[3 * opt.ava.model.numShapeKeys()];
-    cost_function->Evaluate(&fullParams[0], resid, jaco2);
-    std::cerr << "Residual theirs \n"
-              << resid[0] << " " << resid[1] << " " << resid[2] << "\n";
+//     double **jaco2 = new double *[fullParams.size()];
+//     jaco2[0] = new double[3 * 3];
+//     for (int i = 1; i < fullParams.size() - 1; ++i) {
+//         jaco2[i] = new double[3 * 4];
+//     }
+//     jaco2[fullParams.size() - 1] = new double[3 * opt.ava.model.numShapeKeys()];
+//     cost_function->Evaluate(&fullParams[0], resid, jaco2);
+//     std::cerr << "Residual theirs \n"
+//               << resid[0] << " " << resid[1] << " " << resid[2] << "\n";
 
-    std::cerr << "JACOBIAN ours \n";
-    for (int i = 0; i < params.size(); ++i) {
-        int cols = 3 + (i > 0);
-        if (i + 1 == params.size()) cols = opt.ava.model.numShapeKeys();
-        std::cerr << "BLOCK " << i;
-        if (i > 0 && (i < params.size() - 1 || !common.shapeEnabled))
-            std::cerr << " -> "
-                      << common.ancestor[model_point_id][i - 1].jid + 1;
-        std::cerr << "\n";
-        for (int j = 0; j < 3; ++j) {
-            for (int k = 0; k < cols; ++k) {
-                std::cerr << jaco[i][j * cols + k] << "\t";
-            }
-            std::cerr << "\n";
-        }
-        std::cerr << "\n";
-        delete[] jaco[i];
-    }
-    delete[] jaco;
-    std::cerr << "JACOBIAN theirs \n";
-    for (int i = 0; i < fullParams.size(); ++i) {
-        int cols = 3 + (i > 0);
-        if (i + 1 == fullParams.size()) cols = opt.ava.model.numShapeKeys();
-        bool good = false;
-        if (i && (i < fullParams.size() - 1 || !common.shapeEnabled)) {
-            for (auto &ances : common.ancestor[model_point_id]) {
-                if (ances.jid == i - 1) {
-                    good = true;
-                    break;
-                }
-            }
-        } else
-            good = true;
-        if (good) {
-            std::cerr << "BLOCK " << i << "\n";
-            for (int j = 0; j < 3; ++j) {
-                for (int k = 0; k < cols; ++k) {
-                    std::cerr << jaco2[i][j * cols + k] << "\t";
-                }
-                std::cerr << "\n";
-            }
-            std::cerr << "\n";
-        }
-        delete[] jaco2[i];
-    }
-    std::cerr << "\n";
-    delete[] jaco2;
-    delete our_cost_function;
-    delete cost_function;
-    std::exit(0);
-}
-#endif  // TEST_COMPARE_AUTO_DIFF
+//     std::cerr << "JACOBIAN ours \n";
+//     for (int i = 0; i < params.size(); ++i) {
+//         int cols = 3 + (i > 0);
+//         if (i + 1 == params.size()) cols = opt.ava.model.numShapeKeys();
+//         std::cerr << "BLOCK " << i;
+//         if (i > 0 && (i < params.size() - 1 || !common.shapeEnabled))
+//             std::cerr << " -> "
+//                       << common.ancestor[model_point_id][i - 1].jid + 1;
+//         std::cerr << "\n";
+//         for (int j = 0; j < 3; ++j) {
+//             for (int k = 0; k < cols; ++k) {
+//                 std::cerr << jaco[i][j * cols + k] << "\t";
+//             }
+//             std::cerr << "\n";
+//         }
+//         std::cerr << "\n";
+//         delete[] jaco[i];
+//     }
+//     delete[] jaco;
+//     std::cerr << "JACOBIAN theirs \n";
+//     for (int i = 0; i < fullParams.size(); ++i) {
+//         int cols = 3 + (i > 0);
+//         if (i + 1 == fullParams.size()) cols = opt.ava.model.numShapeKeys();
+//         bool good = false;
+//         if (i && (i < fullParams.size() - 1 || !common.shapeEnabled)) {
+//             for (auto &ances : common.ancestor[model_point_id]) {
+//                 if (ances.jid == i - 1) {
+//                     good = true;
+//                     break;
+//                 }
+//             }
+//         } else
+//             good = true;
+//         if (good) {
+//             std::cerr << "BLOCK " << i << "\n";
+//             for (int j = 0; j < 3; ++j) {
+//                 for (int k = 0; k < cols; ++k) {
+//                     std::cerr << jaco2[i][j * cols + k] << "\t";
+//                 }
+//                 std::cerr << "\n";
+//             }
+//             std::cerr << "\n";
+//         }
+//         delete[] jaco2[i];
+//     }
+//     std::cerr << "\n";
+//     delete[] jaco2;
+//     delete our_cost_function;
+//     delete cost_function;
+//     std::exit(0);
+// }
+// #endif  // TEST_COMPARE_AUTO_DIFF
 }  // namespace
 
 AvatarOptimizer::AvatarOptimizer(Avatar &ava, const CameraIntrin &intrin,
-                                 const cv::Size &image_size, int num_parts,
-                                 const std::vector<int> &part_map)
+                                 const cv::Size &image_size
+                                 )
     : ava(ava),
       intrin(intrin),
-      imageSize(image_size),
-      numParts(num_parts),
-      partMap(part_map) {
+      imageSize(image_size)
+      {
     r.resize(ava.model.numJoints());
     std::cout<<"#####33\n";
-    std::cout<<numParts;
-    modelPartIndices.resize(numParts);
-    modelPartLabelCounts.resize(numParts);
-    modelPartClouds.resize(numParts);
-    modelPartLabelCounts.setZero();
+    // std::cout<<numParts;
+    // modelPartIndices.resize(numParts);
+    // modelPartLabelCounts.resize(numParts);
+    // modelPartClouds.resize(numParts);
+    // modelPartLabelCounts.setZero();
     std::cout<<"#####34\n";
-    for (size_t i = 0; i < ava.model.numPoints(); ++i) {
-        int mainJointId = ava.model.assignedJoints[i][0].second;
-        ++modelPartLabelCounts(partMap[mainJointId]);
-    }
+    // for (size_t i = 0; i < ava.model.numPoints(); ++i) {
+    //     int mainJointId = ava.model.assignedJoints[i][0].second;
+    //     ++modelPartLabelCounts(partMap[mainJointId]);
+    // }
     
-    for (int i = 0; i < numParts; ++i) {
-        if (modelPartLabelCounts(i) == 0) continue;
-        modelPartClouds[i].resize(3, modelPartLabelCounts(i));
-        modelPartIndices[i].resize(modelPartLabelCounts(i));
-    }
+    // for (int i = 0; i < numParts; ++i) {
+    //     if (modelPartLabelCounts(i) == 0) continue;
+    //     modelPartClouds[i].resize(3, modelPartLabelCounts(i));
+    //     modelPartIndices[i].resize(modelPartLabelCounts(i));
+    // }
     
-    modelPartLabelCounts.setZero();
-    for (size_t i = 0; i < ava.model.numPoints(); ++i) {
-        int mainJointId = ava.model.assignedJoints[i][0].second;
-        int partId = partMap[mainJointId];
-        modelPartIndices[partId][modelPartLabelCounts(partId)] = i;
-        ++modelPartLabelCounts(partId);
-    }
+    // modelPartLabelCounts.setZero();
+    // for (size_t i = 0; i < ava.model.numPoints(); ++i) {
+    //     int mainJointId = ava.model.assignedJoints[i][0].second;
+    //     int partId = partMap[mainJointId];
+    //     modelPartIndices[partId][modelPartLabelCounts(partId)] = i;
+    //     ++modelPartLabelCounts(partId);
+    // }
     
 }
 
-void AvatarOptimizer::optimize(
-    const Eigen::Matrix<double, 3, Eigen::Dynamic> &data_cloud,
-    const Eigen::VectorXi &data_part_labels, int icp_iters, int num_threads) {
+void AvatarOptimizer::optimize(int icp_iters, int num_threads) {
     // Convert to quaternion
     for (int i = 0; i < ava.model.numJoints(); ++i) {
         Eigen::AngleAxisd aa;
@@ -1259,7 +1256,7 @@ void AvatarOptimizer::optimize(
 
     AvatarEvaluationCommonData<AvatarCostFunctorCache> common(*this, true);
     common.numThreads = num_threads;  // boost::thread::hardware_concurrency();;
-    std::vector<std::vector<int>> correspondences;
+    // std::vector<std::vector<int>> correspondences;
 
 #ifdef PCL_DEBUG_VISUALIZE
     auto viewer = pcl::visualization::PCLVisualizer::Ptr(
@@ -1267,52 +1264,52 @@ void AvatarOptimizer::optimize(
     viewer->initCameraParameters();
 #endif
 
-#ifdef TEST_COMPARE_AUTO_DIFF
-    testCompareAutoDiff(*this, data_cloud, 0, 0);
-#endif
+// #ifdef TEST_COMPARE_AUTO_DIFF
+//     testCompareAutoDiff(*this, data_cloud, 0, 0);
+// #endif
 
     // Create separate point cloud for each body part
     AvatarRenderer renderer(ava, intrin);
     std::vector<bool> pointVisible(ava.cloud.size());
 
-    std::vector<CloudType> partClouds(numParts);
-    std::vector<Eigen::VectorXi> partIndices(numParts);
-    Eigen::VectorXi partLabelCounts(numParts);
-    partLabelCounts.setZero();
-    for (size_t i = 0; i < data_part_labels.rows(); ++i) {
-        ++partLabelCounts(data_part_labels(i));
-    }
-    for (int i = 0; i < numParts; ++i) {
-        if (partLabelCounts(i) == 0) continue;
-        partClouds[i].resize(3, partLabelCounts(i));
-        partIndices[i].resize(partLabelCounts(i));
-    }
+    // std::vector<CloudType> partClouds(numParts);
+    // std::vector<Eigen::VectorXi> partIndices(numParts);
+    // Eigen::VectorXi partLabelCounts(numParts);
+    // partLabelCounts.setZero();
+    // for (size_t i = 0; i < data_part_labels.rows(); ++i) {
+    //     ++partLabelCounts(data_part_labels(i));
+    // }
+    // for (int i = 0; i < numParts; ++i) {
+    //     if (partLabelCounts(i) == 0) continue;
+    //     partClouds[i].resize(3, partLabelCounts(i));
+    //     partIndices[i].resize(partLabelCounts(i));
+    // }
 
-    partLabelCounts.setZero();
-    for (size_t i = 0; i < data_part_labels.rows(); ++i) {
-        int partId = data_part_labels(i);
-        partClouds[partId].col(partLabelCounts(partId)) = data_cloud.col(i);
-        partIndices[partId][partLabelCounts(partId)] = i;
-        ++partLabelCounts(partId);
-    }
+    // partLabelCounts.setZero();
+    // for (size_t i = 0; i < data_part_labels.rows(); ++i) {
+    //     int partId = data_part_labels(i);
+    //     partClouds[partId].col(partLabelCounts(partId)) = data_cloud.col(i);
+    //     partIndices[partId][partLabelCounts(partId)] = i;
+    //     ++partLabelCounts(partId);
+    // }
 
     // Build KD tree for each body part
-    std::vector<std::unique_ptr<KdTree>> partKD;
-    for (int i = 0; i < numParts; ++i) {
-        if (partLabelCounts(i) == 0) {
-            partKD.emplace_back(nullptr);
-            continue;
-        }
-        partKD.emplace_back(new KdTree(partClouds[i], 10));
-        partKD.back()->index->buildIndex();
-    }
+    // std::vector<std::unique_ptr<KdTree>> partKD;
+    // for (int i = 0; i < numParts; ++i) {
+    //     if (partLabelCounts(i) == 0) {
+    //         partKD.emplace_back(nullptr);
+    //         continue;
+    //     }
+    //     partKD.emplace_back(new KdTree(partClouds[i], 10));
+    //     partKD.back()->index->buildIndex();
+    // }
 
     // Store labels for each model skin point
-    Eigen::VectorXi modelPartLabels(ava.model.numPoints());
-    for (size_t i = 0; i < ava.model.numPoints(); ++i) {
-        int mainJointId = ava.model.assignedJoints[i][0].second;
-        modelPartLabels[i] = partMap[mainJointId];
-    }
+    // Eigen::VectorXi modelPartLabels(ava.model.numPoints());
+    // for (size_t i = 0; i < ava.model.numPoints(); ++i) {
+    //     int mainJointId = ava.model.assignedJoints[i][0].second;
+    //     modelPartLabels[i] = partMap[mainJointId];
+    // }
 
     ceres::Solver::Options options;
     options.linear_solver_type = ceres::LinearSolverType::DENSE_NORMAL_CHOLESKY;
@@ -1391,11 +1388,11 @@ void AvatarOptimizer::optimize(
         }
 
         // Find correspondences
-        findNN(data_cloud, data_part_labels, partIndices, ava.cloud,
-               modelPartLabels, modelPartIndices, modelPartClouds, pointVisible,
-               correspondences, partKD, nnStep, num_threads,
-               /*invert*/ true);  // 3.3 ms
-        PROFILE(>> NN Corresponences);
+        // findNN(data_cloud, data_part_labels, partIndices, ava.cloud,
+        //        modelPartLabels, modelPartIndices, modelPartClouds, pointVisible,
+        //        correspondences, partKD, nnStep, num_threads,
+        //        /*invert*/ true);  // 3.3 ms
+        // PROFILE(>> NN Corresponences);
 
         using namespace ceres;
 
@@ -1421,7 +1418,7 @@ void AvatarOptimizer::optimize(
         // std::vector<std::tuple<ceres::ResidualBlockId, int, int> > residuals;
         std::vector<std::vector<double *>> pointParams(ava.model.numPoints());
         for (int i = 0; i < ava.model.numPoints(); ++i) {
-            if (correspondences[i].empty()) continue;
+            // if (correspondences[i].empty()) continue;
             auto &params = pointParams[i];
             common.caches.emplace_back(common, i);
             params.reserve(common.ancestor[i].size() + 1);
@@ -1479,8 +1476,8 @@ void AvatarOptimizer::optimize(
         PROFILE(>> Construct problem : residual blocks);
 
 #ifdef PCL_DEBUG_VISUALIZE
-        debugVisualize(viewer, data_cloud, correspondences, pointVisible,
-                       common);
+        // debugVisualize(viewer, data_cloud, correspondences, pointVisible,
+        //                common);
 #endif
 
         // Run solver

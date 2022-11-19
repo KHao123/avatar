@@ -138,7 +138,17 @@ int main(int argc, char** argv) {
     ark::Avatar ava(avaModel);
     ark::AvatarOptimizer avaOpt(ava, intrin, background.size(), rtree.numParts,
                                 rtree.partMap);
-
+    std::cout << ava.model.numJoints() << std::endl;
+    std::cout << ava.model.numPoints() << std::endl;
+    std::cout << ava.model.parent << std::endl;
+    std::cout << ava.model.numShapeKeys() << std::endl;
+    std::cout << ava.model.useJointShapeRegressor << std::endl;
+    std::cout << ava.model.baseCloud << std::endl;
+    std::cout << ava.model.mesh << std::endl;
+    std::cout << ava.model.jointRegressor << std::endl;
+    std::cout << ava.model.assignedJoints.size() << std::endl;
+    std::cout << ava.model.keyClouds << std::endl;
+    getchar();
     
     smplx::ModelX model(
         smplx::util::parse_gender("MALE"));

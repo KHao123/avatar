@@ -2,6 +2,7 @@
 #include <string>
 #include <boost/filesystem.hpp>
 #include <cnpy.h>
+#include <fstream>
 
 #include "Version.h"
 #include "Util.h"

@@ -186,6 +186,11 @@ set(
   Util.cpp
   # ViconSkeleton.cpp
   cnpy.cpp
+
+  model.cpp
+  util_smplx.cpp
+  body.cpp
+  
 )
 
 set(
@@ -204,6 +209,12 @@ set(
   # ${INCLUDE_DIR}/ViconSkeleton.h
   ${INCLUDE_DIR}/nanoflann.hpp
   ${INCLUDE_DIR}/cnpy.h
+
+  ${INCLUDE_DIR}/smplx.hpp
+  ${INCLUDE_DIR}/defs.hpp
+  ${INCLUDE_DIR}/model_config.hpp
+  ${INCLUDE_DIR}/util_smplx.hpp
+  ${INCLUDE_DIR}/util_cnpy_smplx.hpp
 )
 set(
   PRIVATE_HEADERS
@@ -266,20 +277,20 @@ if ( PCL_FOUND )
     set_target_properties( ${LIB_NAME} PROPERTIES COMPILE_FLAGS ${TARGET_COMPILE_FLAGS} )
 endif()
 
-add_executable( smpl-viewer smpl-viewer.cpp )
-target_link_libraries( smpl-viewer ${DEPENDENCIES} ${LIB_NAME} meshview )
+# add_executable( smpl-viewer smpl-viewer.cpp )
+# target_link_libraries( smpl-viewer ${DEPENDENCIES} ${LIB_NAME} meshview )
 
-add_executable( ${SYNTH_NAME} smplsynth.cpp )
-target_link_libraries( ${SYNTH_NAME} ${DEPENDENCIES} ${LIB_NAME} )
-if ( PCL_FOUND )
-    set_target_properties( ${SYNTH_NAME} PROPERTIES COMPILE_FLAGS ${TARGET_COMPILE_FLAGS} )
-endif()
+# add_executable( ${SYNTH_NAME} smplsynth.cpp )
+# target_link_libraries( ${SYNTH_NAME} ${DEPENDENCIES} ${LIB_NAME} )
+# if ( PCL_FOUND )
+#     set_target_properties( ${SYNTH_NAME} PROPERTIES COMPILE_FLAGS ${TARGET_COMPILE_FLAGS} )
+# endif()
 
-if( PCL_FOUND )
-    add_executable( scratch scratch.cpp )
-    target_link_libraries( scratch ${DEPENDENCIES} ${LIB_NAME} )
-    set_target_properties( scratch PROPERTIES COMPILE_FLAGS ${TARGET_COMPILE_FLAGS} )
-endif()
+# if( PCL_FOUND )
+#     add_executable( scratch scratch.cpp )
+#     target_link_libraries( scratch ${DEPENDENCIES} ${LIB_NAME} )
+#     set_target_properties( scratch PROPERTIES COMPILE_FLAGS ${TARGET_COMPILE_FLAGS} )
+# endif()
 
 add_executable( demo demo.cpp )
 target_link_libraries( demo ${DEPENDENCIES} ${LIB_NAME} )

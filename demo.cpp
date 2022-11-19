@@ -17,6 +17,8 @@
 #include "Calibration.h"
 #include "RTree.h"
 #include "Util.h"
+#include "smplx.hpp"
+#include "util_smplx.hpp"
 #define BEGIN_PROFILE auto start = std::chrono::high_resolution_clock::now()
 #define PROFILE(x)                                                    \
     do {                                                              \
@@ -136,6 +138,12 @@ int main(int argc, char** argv) {
     ark::Avatar ava(avaModel);
     ark::AvatarOptimizer avaOpt(ava, intrin, background.size(), rtree.numParts,
                                 rtree.partMap);
+
+    
+    smplx::ModelX model(
+        smplx::util::parse_gender("MALE"));
+    smplx::BodyX body(model);
+
     avaOpt.betaPose = betaPose;
     avaOpt.betaShape = betaShape;
     avaOpt.nnStep = nnStep;
@@ -151,6 +159,8 @@ int main(int argc, char** argv) {
     bool reinit = true;
 
     while (true) {
+        // body.update();
+        // std::cout << body.pose();
         std::stringstream ss_img_id;
         ss_img_id << std::setw(padSize) << std::setfill('0')
                   << std::to_string(imId);

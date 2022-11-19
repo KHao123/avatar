@@ -644,56 +644,56 @@ struct AvatarICPCostFunctor : ceres::CostFunction {
 };
 
 /** Ceres analytic derivative cost function for pose prior error */
-struct AvatarPosePriorCostFunctor : ceres::CostFunction {
-    AvatarPosePriorCostFunctor(
-        AvatarEvaluationCommonData<AvatarCostFunctorCache> &common_data)
-        : commonData(common_data),
-          posePrior(commonData.ava.model.posePrior),
-          nSmplJoints(commonData.ava.model.numJoints() - 1) {
-        set_num_residuals(nSmplJoints * 3 + 1);  // 3 for each joint + 1 extra
-        std::vector<int> *paramBlockSizes = mutable_parameter_block_sizes();
-        for (int i = 0; i < nSmplJoints; ++i) {
-            paramBlockSizes->push_back(
-                4);  // Add rotation block for each non-root joint
-        }
-    }
+// struct AvatarPosePriorCostFunctor : ceres::CostFunction {
+//     AvatarPosePriorCostFunctor(
+//         AvatarEvaluationCommonData<AvatarCostFunctorCache> &common_data)
+//         : commonData(common_data),
+//           posePrior(commonData.ava.model.posePrior),
+//           nSmplJoints(commonData.ava.model.numJoints() - 1) {
+//         set_num_residuals(nSmplJoints * 3 + 1);  // 3 for each joint + 1 extra
+//         std::vector<int> *paramBlockSizes = mutable_parameter_block_sizes();
+//         for (int i = 0; i < nSmplJoints; ++i) {
+//             paramBlockSizes->push_back(
+//                 4);  // Add rotation block for each non-root joint
+//         }
+//     }
 
-    bool Evaluate(double const *const *parameters, double *residuals,
-                  double **jacobians) const final {
-        const int nResids = nSmplJoints * 3 + 1;
-        Eigen::VectorXd smplParams(nSmplJoints * 3);
-        for (int i = 0; i < nSmplJoints; ++i) {
-            Eigen::Map<const Eigen::Quaterniond> q(parameters[i]);
-            Eigen::AngleAxisd aa(q);
-            smplParams.segment<3>(i * 3) = aa.axis() * aa.angle();
-        }
-        Eigen::Map<Eigen::VectorXd> resid(residuals, nResids);
-        int compIdx;
-        resid.noalias() = posePrior.residual(smplParams, &compIdx) *
-                          commonData.scaledBetaPose;
-        if (jacobians != nullptr) {
-            const Eigen::MatrixXd &L = posePrior.prec_cho[compIdx];
-            // precision = L L^T
-            for (int i = 0; i < nSmplJoints; ++i) {
-                if (jacobians[i] != nullptr) {
-                    Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 4,
-                                             Eigen::RowMajor>>
-                        J(jacobians[i], nResids, 4);
-                    J.topLeftCorner<Eigen::Dynamic, 3>(nResids - 1, 3)
-                        .noalias() = L.middleRows<3>(i * 3).transpose() *
-                                     0.707106781186548 *
-                                     commonData.scaledBetaPose;
-                    J.rightCols<1>().setZero();
-                    J.bottomLeftCorner<1, 3>().setZero();
-                }
-            }
-        }
-        return true;
-    }
-    AvatarEvaluationCommonData<AvatarCostFunctorCache> &commonData;
-    const GaussianMixture &posePrior;
-    const int nSmplJoints;
-};
+//     bool Evaluate(double const *const *parameters, double *residuals,
+//                   double **jacobians) const final {
+//         const int nResids = nSmplJoints * 3 + 1;
+//         Eigen::VectorXd smplParams(nSmplJoints * 3);
+//         for (int i = 0; i < nSmplJoints; ++i) {
+//             Eigen::Map<const Eigen::Quaterniond> q(parameters[i]);
+//             Eigen::AngleAxisd aa(q);
+//             smplParams.segment<3>(i * 3) = aa.axis() * aa.angle();
+//         }
+//         Eigen::Map<Eigen::VectorXd> resid(residuals, nResids);
+//         int compIdx;
+//         resid.noalias() = posePrior.residual(smplParams, &compIdx) *
+//                           commonData.scaledBetaPose;
+//         if (jacobians != nullptr) {
+//             const Eigen::MatrixXd &L = posePrior.prec_cho[compIdx];
+//             // precision = L L^T
+//             for (int i = 0; i < nSmplJoints; ++i) {
+//                 if (jacobians[i] != nullptr) {
+//                     Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 4,
+//                                              Eigen::RowMajor>>
+//                         J(jacobians[i], nResids, 4);
+//                     J.topLeftCorner<Eigen::Dynamic, 3>(nResids - 1, 3)
+//                         .noalias() = L.middleRows<3>(i * 3).transpose() *
+//                                      0.707106781186548 *
+//                                      commonData.scaledBetaPose;
+//                     J.rightCols<1>().setZero();
+//                     J.bottomLeftCorner<1, 3>().setZero();
+//                 }
+//             }
+//         }
+//         return true;
+//     }
+//     AvatarEvaluationCommonData<AvatarCostFunctorCache> &commonData;
+//     const GaussianMixture &posePrior;
+//     const int nSmplJoints;
+// };
 
 /** Ceres analytic derivative cost function for shape prior error
  *  (This is extremely simple, just the squared l2-norm of w!) */
@@ -1457,15 +1457,15 @@ void AvatarOptimizer::optimize(
         common.scaledBetaPose = betaPose * std::sqrt(totalResiduals) / 15.;
         common.scaledBetaShape = betaShape * std::sqrt(totalResiduals) / 15.;
 
-        std::vector<double *> posePriorParams;
-        posePriorParams.reserve(ava.model.numJoints() - 1);
-        for (int i = 1; i < ava.model.numJoints(); ++i) {
-            posePriorParams.push_back(r[i].coeffs().data());
-        }
-        if (betaPose > 0.) {
-            problem.AddResidualBlock(new AvatarPosePriorCostFunctor(common),
-                                     NULL, posePriorParams);
-        }
+        // std::vector<double *> posePriorParams;
+        // posePriorParams.reserve(ava.model.numJoints() - 1);
+        // for (int i = 1; i < ava.model.numJoints(); ++i) {
+        //     posePriorParams.push_back(r[i].coeffs().data());
+        // }
+        // if (betaPose > 0.) {
+        //     problem.AddResidualBlock(new AvatarPosePriorCostFunctor(common),
+        //                              NULL, posePriorParams);
+        // }
         if (betaShape > 0.) {
             problem.AddResidualBlock(
                 new AvatarShapePriorCostFunctor(ava.model.numShapeKeys(),

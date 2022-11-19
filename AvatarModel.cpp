@@ -19,8 +19,10 @@ AvatarModel::AvatarModel(const std::string& model_dir,
     path modelPath = model_dir.empty()
                          ? util::resolveRootPath("data/avatar-model")
                          : model_dir;
-    path npzPath = modelPath / "model.npz";
-    path posePriorPath = modelPath / "pose_prior.txt";
+    // path npzPath = modelPath / "model.npz";
+    path npzPath = "/Users/chenkanghao/workspace/compare/smplxpp/data/models/smpl/SMPL_NEUTRAL.npz";
+    // path posePriorPath = modelPath / "pose_prior.txt";
+    // path posePriorPath = "";
     if (exists(npzPath)) {
         // New (npz) format
         cnpy::npz_t npz = cnpy::npz_load(npzPath.string());
@@ -294,6 +296,6 @@ AvatarModel::AvatarModel(const std::string& model_dir,
     }
 
     // Maybe load pose prior
-    posePrior.load(posePriorPath.string());
+    // posePrior.load(posePriorPath.string());
 }
 }  // namespace ark

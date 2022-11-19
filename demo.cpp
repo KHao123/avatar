@@ -150,9 +150,9 @@ int main(int argc, char** argv) {
     std::cout << ava.model.keyClouds << std::endl;
     getchar();
     
-    smplx::ModelX model(
-        smplx::util::parse_gender("MALE"));
-    smplx::BodyX body(model);
+    // smplx::ModelX model(
+    //     smplx::util::parse_gender("MALE"));
+    // smplx::BodyX body(model);
 
     avaOpt.betaPose = betaPose;
     avaOpt.betaShape = betaShape;

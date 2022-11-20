@@ -725,6 +725,8 @@ struct AvatarShapePriorCostFunctor : ceres::CostFunction {
     const double betaShape;
 };
 
+
+
 #ifdef TEST_COMPARE_AUTO_DIFF
 /** Auto diff cost function w/ derivative for Ceres
  *  (Extremely poorly optimized, used for checking correctness of analytic
@@ -816,6 +818,8 @@ struct AvatarShapePriorCostFunctor : ceres::CostFunction {
 //         resid.noalias() -= dataCloud.col(dataPointId);
 //         return true;
 //     }
+
+
 
 //     const CloudType &dataCloud;
 //     int dataPointId, pointId;
@@ -1450,6 +1454,9 @@ void AvatarOptimizer::optimize(int icp_iters, int num_threads) {
         //     }
         //     ++cid;
         // }
+        
+        // CostFunction* kps2d_cost_function = new AutoDiffCostFunction<Kps2dCostFunctor, 1, ava.r.size()>(new Kps2dCostFunctor(kps2d_pre, kps2d_gt));
+        // problem.AddResidualBlock(kps2d_cost_function, NULL, ava.r)
 
         /** Scale the function weights according to number of ICP type
          * residuals. Otherwise the function terms become extremely imbalanced

@@ -21,7 +21,8 @@ AvatarModel::AvatarModel(const std::string& model_dir,
                          : model_dir;
     // path npzPath = modelPath / "model.npz";
     // path npzPath = "/Users/chenkanghao/workspace/compare/smplxpp/data/models/smpl/SMPL_MALE.npz";
-    path npzPath = "../data/models/smplx/SMPLX_MALE.npz";
+    // path npzPath = "../data/models/smplx/SMPLX_MALE.npz";
+    path npzPath = "../data/models/smplh/SMPLH_MALE.npz";
     // path posePriorPath = modelPath / "pose_prior.txt";
     // path posePriorPath = "";
     if (exists(npzPath)) {

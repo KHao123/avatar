@@ -282,6 +282,10 @@ int main(int argc, char** argv) {
                             Eigen::AngleAxisd(M_PI, Eigen::Vector3d(0, 1, 0))
                                 .toRotationMatrix();
                         // reinit = false;
+                        // ava.r[/*r knee*/ 5] = Eigen::AngleAxisd(0.5*M_PI, Eigen::Vector3d(1, 0, 0))
+                        //         .toRotationMatrix();
+                        // ava.r[/*r knee*/ 34] = Eigen::AngleAxisd(0.5*M_PI, Eigen::Vector3d(0, 1, 0))
+                        //         .toRotationMatrix();
                         ava.update();
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);

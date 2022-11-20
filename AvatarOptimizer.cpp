@@ -26,12 +26,12 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #endif
 
-#define BEGIN_PROFILE  // auto start = std::chrono::high_resolution_clock::now()
+#define BEGIN_PROFILE   auto start = std::chrono::high_resolution_clock::now()
 #define PROFILE( \
-    x)  // do{printf("%s: %f ms\n", #x, std::chrono::duration<double,
-        // std::milli>(std::chrono::high_resolution_clock::now() -
-        // start).count()); start =
-        // std::chrono::high_resolution_clock::now(); }while(false)
+    x)   do{printf("%s: %f ms\n", #x, std::chrono::duration<double, \
+         std::milli>(std::chrono::high_resolution_clock::now() - \
+         start).count()); start = \
+         std::chrono::high_resolution_clock::now(); }while(false)
 
 // Uncomment below line to compare analytic diff results to auto diff
 //#define TEST_COMPARE_AUTO_DIFF

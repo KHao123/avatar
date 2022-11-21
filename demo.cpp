@@ -19,6 +19,9 @@
 #include "Util.h"
 #include "smplx.hpp"
 #include "util_smplx.hpp"
+#include <cnpy.h>
+#include "UtilCnpy.h"
+
 #define BEGIN_PROFILE auto start = std::chrono::high_resolution_clock::now()
 #define PROFILE(x)                                                    \
     do {                                                              \
@@ -194,6 +197,21 @@ int main(int argc, char** argv) {
             std::cerr << "WARNING: no more images found, exiting\n";
             break;
         }
+        std::string kps2d_npzPath = "/Users/chenkanghao/Desktop/works/hand_pose_estimation/mediapipe_test/conference-room/annotation_" + ss_img_id.str() + ".npz";
+                            
+        cnpy::npz_t hand_npz = cnpy::npz_load(kps2d_npzPath);
+        // const auto hand_right = hand_npz["right_hand"];
+        // std::cout<<hand_right.shape[0]<<std::endl;
+        // const auto& hand_right_raw = hand_npz.at("right");
+        // ark::util::assertShape(hand_right_raw, {1, 21, 3});
+        // Eigen::SparseMatrix<double> hand_right_kps2d;
+        // hand_right_kps2d.resize(21, 3);
+        // hand_right_kps2d = ark::util::loadFloatMatrix(hand_right_raw, 21, 3)
+        //                      .sparseView();
+        // hand_right_kps2d.makeCompressed();
+        // std::cout<<hand_right_kps2d<<std::endl;
+        // getchar();
+
         cv::Mat depth;
         cv::extractChannel(image, depth, 2);
         auto ccstart = std::chrono::high_resolution_clock::now();
@@ -290,7 +308,7 @@ int main(int argc, char** argv) {
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);
                     }
-                    avaOpt.optimize(icpIters,
+                    avaOpt.optimize(hand_npz, icpIters,
                                     std::thread::hardware_concurrency());
                     PROFILE(Optimize(Total));
                     printf(

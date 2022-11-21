@@ -14,7 +14,7 @@
 #include "AvatarRenderer.h"
 #include "Util.h"
 #include "Version.h"
-
+#include "UtilCnpy.h"
 // #define PCL_DEBUG_VISUALIZE
 
 #ifndef OPENARK_PCL_ENABLED
@@ -158,7 +158,7 @@ using MatAlloc = Eigen::aligned_allocator<Eigen::Matrix3d>;
 using VecAlloc = Eigen::aligned_allocator<Eigen::Vector3d>;
 
 /** Evaluation callback for Ceres */
-template <class Cache>
+// template <class Cache>
 struct AvatarEvaluationCommonData : public ceres::EvaluationCallback {
     /** Max number of joint assignments to consider for each joint */
     static const int MAX_ASSIGN = 4;
@@ -166,9 +166,10 @@ struct AvatarEvaluationCommonData : public ceres::EvaluationCallback {
     /** If true, will recalculate shape every update */
     const bool shapeEnabled;
 
-    AvatarEvaluationCommonData(AvatarOptimizer &opt, bool shape_enabled = false)
+    AvatarEvaluationCommonData(AvatarOptimizer &opt, const CameraIntrin& intrin, bool shape_enabled = false)
         : opt(opt),
           ava(opt.ava),
+          intrin(intrin),
           numJointSpaces(opt.ava.model.numJoints() + 1),
           shapeEnabled(shape_enabled) {
         // _L.resize(nJoints * AvatarOptimizer::ROT_SIZE);
@@ -284,66 +285,66 @@ struct AvatarEvaluationCommonData : public ceres::EvaluationCallback {
                               bool new_evaluation_point) final {
         // std::cerr << "PREP " << evaluate_jacobians << ", " <<
         // new_evaluation_point << "\n";
-        if (new_evaluation_point) {
-            // BEGIN_PROFILE;
-            if (shapeEnabled || !shapeComputed) CalcShape();
-            // PROFILE(CalcShape);
-            jointVecInit.col(0).noalias() = ava.p;
+        // if (new_evaluation_point) {
+        //     // BEGIN_PROFILE;
+        //     if (shapeEnabled || !shapeComputed) CalcShape();
+        //     // PROFILE(CalcShape);
+        //     jointVecInit.col(0).noalias() = ava.p;
 
-            for (int i = 0; i < numJointSpaces - 1; ++i) {
-                // double * jacobian = localJacobian[i].data();
-                auto &x = opt.r[i].coeffs();
-                /** Jacobian of local parameterization '+' function at 0 */
-                localJacobian[i] << x(3), x(2), -x(1), -x(2), x(3), x(0), x(1),
-                    -x(0), x(3), -x(0), -x(1), -x(2);
-            }
-            // PROFILE(lojac);
+        //     for (int i = 0; i < numJointSpaces - 1; ++i) {
+        //         // double * jacobian = localJacobian[i].data();
+        //         auto &x = opt.r[i].coeffs();
+        //         /** Jacobian of local parameterization '+' function at 0 */
+        //         localJacobian[i] << x(3), x(2), -x(1), -x(2), x(3), x(0), x(1),
+        //             -x(0), x(3), -x(0), -x(1), -x(2);
+        //     }
+        //     // PROFILE(lojac);
 
-            // Compute relative rotations and translations
-            R(-1, -1).setIdentity();  // -1 means 'to global'
-            t(-1, -1).setZero();
-            for (int i = 0; i < numJointSpaces - 1; ++i) {
-                R(i, i).setIdentity();
-                Eigen::Matrix3d rot = opt.r[i].toRotationMatrix();
-                t(i, i).setZero();
-                int p = ava.model.parent[i];
-                for (int j = p;; j = ava.model.parent[j]) {
-                    R(j, i).noalias() = R(j, p) * rot;
-                    t(j, i).noalias() = R(j, p) * jointVecInit.col(i) + t(j, p);
-                    if (j == -1) break;
-                }
-            }
-            // PROFILE(RT);
+        //     // Compute relative rotations and translations
+        //     R(-1, -1).setIdentity();  // -1 means 'to global'
+        //     t(-1, -1).setZero();
+        //     for (int i = 0; i < numJointSpaces - 1; ++i) {
+        //         R(i, i).setIdentity();
+        //         Eigen::Matrix3d rot = opt.r[i].toRotationMatrix();
+        //         t(i, i).setZero();
+        //         int p = ava.model.parent[i];
+        //         for (int j = p;; j = ava.model.parent[j]) {
+        //             R(j, i).noalias() = R(j, p) * rot;
+        //             t(j, i).noalias() = R(j, p) * jointVecInit.col(i) + t(j, p);
+        //             if (j == -1) break;
+        //         }
+        //     }
+        //     // PROFILE(RT);
 
-            if (shapeEnabled) {
-                // Compute joint-to-parent accumulated shape differences
-                for (int j = 1; j < numJointSpaces - 1; ++j) {
-                    H[j].noalias() = R(-1, ava.model.parent[j]) * Sp[j] +
-                                     H[ava.model.parent[j]];
-                }
-            }
-            // PROFILE(H);
+        //     if (shapeEnabled) {
+        //         // Compute joint-to-parent accumulated shape differences
+        //         for (int j = 1; j < numJointSpaces - 1; ++j) {
+        //             H[j].noalias() = R(-1, ava.model.parent[j]) * Sp[j] +
+        //                              H[ava.model.parent[j]];
+        //         }
+        //     }
+        //     // PROFILE(H);
 
-            std::atomic<size_t> cacheId(0);
-            auto worker = [evaluate_jacobians, &cacheId, this](int workerId) {
-                size_t workerCacheId;
-                while (true) {
-                    workerCacheId = cacheId++;
-                    if (workerCacheId >= caches.size()) break;
-                    caches[workerCacheId].updateData(evaluate_jacobians);
-                }
-            };
+        //     std::atomic<size_t> cacheId(0);
+        //     auto worker = [evaluate_jacobians, &cacheId, this](int workerId) {
+        //         size_t workerCacheId;
+        //         while (true) {
+        //             workerCacheId = cacheId++;
+        //             if (workerCacheId >= caches.size()) break;
+        //             caches[workerCacheId].updateData(evaluate_jacobians);
+        //         }
+        //     };
 
-            std::vector<std::thread> threadPool;
-            for (int i = 0; i < numThreads; ++i) {
-                threadPool.emplace_back(worker, i);
-            }
-            for (auto &thread : threadPool) {
-                thread.join();
-            }
-            // PROFILE(Caches);
-            // PROFILE(ALL Prepare);
-        }
+        //     std::vector<std::thread> threadPool;
+        //     for (int i = 0; i < numThreads; ++i) {
+        //         threadPool.emplace_back(worker, i);
+        //     }
+        //     for (auto &thread : threadPool) {
+        //         thread.join();
+        //     }
+        //     // PROFILE(Caches);
+        //     // PROFILE(ALL Prepare);
+        // }
     }
 
     /** Joint-to-ancestor joint rotation (j_ances=-1 is global) */
@@ -364,6 +365,7 @@ struct AvatarEvaluationCommonData : public ceres::EvaluationCallback {
     Avatar &ava;
     /** WARNING: is actual number of joints + 1 */
     int numJointSpaces;
+    const CameraIntrin& intrin;
 
     struct Ancestor {
         Ancestor() {}
@@ -423,7 +425,7 @@ struct AvatarEvaluationCommonData : public ceres::EvaluationCallback {
     CloudType shapedCloud;
 
     /** List of point-specific caches */
-    std::vector<Cache> caches;
+    // std::vector<Cache> caches;
 
     /** Local parameterization jacobian */
     std::vector<
@@ -456,153 +458,143 @@ struct AvatarEvaluationCommonData : public ceres::EvaluationCallback {
 };
 
 /** Common method for each model point */
-struct AvatarCostFunctorCache {
-    AvatarCostFunctorCache(
-        AvatarEvaluationCommonData<AvatarCostFunctorCache> &common_data,
-        int point_id)
-        : commonData(common_data),
-          opt(common_data.opt),
-          ava(common_data.opt.ava),
-          pointId(point_id) {
-        icpJacobian.resize(commonData.ancestor[pointId].size());
-        if (commonData.shapeEnabled) {
-            icpShapeJacobian.resize(3, ava.model.numShapeKeys());
-        }
-    }
+// struct AvatarCostFunctorCache {
+//     AvatarCostFunctorCache(
+//         AvatarEvaluationCommonData<AvatarCostFunctorCache> &common_data,
+//         int point_id)
+//         : commonData(common_data),
+//           opt(common_data.opt),
+//           ava(common_data.opt.ava),
+//           pointId(point_id) {
+//         icpJacobian.resize(commonData.ancestor[pointId].size());
+//         if (commonData.shapeEnabled) {
+//             icpShapeJacobian.resize(3, ava.model.numShapeKeys());
+//         }
+//     }
+//     bool getICPJacobians(double *residuals, double **jacobians) const {
+//         Eigen::Map<Eigen::Vector3d> residualMap(residuals);
+//         residualMap.noalias() = resid;
+//         if (jacobians != nullptr) {
+//             if (jacobians[0] != nullptr) {
+//                 Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> J(
+//                     jacobians[0]);
+//                 J.setIdentity();
+//             }
+//             size_t i = 0;
+//             for (; i < commonData.ancestor[pointId].size(); ++i) {
+//                 if (jacobians[i + 1] != nullptr) {
+//                     Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> J(
+//                         jacobians[i + 1]);
+// #ifdef TEST_COMPARE_AUTO_DIFF
+//                     J.noalias() = icpJacobian[i];
+// #else
+//                     J.topLeftCorner<3, 3>().noalias() = icpJacobian[i];
+//                     J.rightCols<1>().setZero();
+// #endif
+//                 }
+//             }
+//             if (commonData.shapeEnabled && jacobians[i + 1] != nullptr) {
+//                 Eigen::Map<
+//                     Eigen::Matrix<double, 3, Eigen::Dynamic, Eigen::RowMajor>>
+//                     J(jacobians[i + 1], 3, ava.model.numShapeKeys());
+//                 J.noalias() = icpShapeJacobian;
+//             }
+//         }
+//         return true;
+//     }
+//     void updateData(bool compute_jacobians) {
+//         auto pointPosInit = commonData.shapedCloud.col(pointId);
+//         resid.setZero();
+//         for (auto &assign : ava.model.assignedJoints[pointId]) {
+//             int k = assign.second;
+//             resid += assign.first *
+//                      (commonData.R(-1, k) *
+//                           (pointPosInit - commonData.jointPosInit.col(k)) +
+//                       commonData.t(-1, k));
+//         }
+//         if (compute_jacobians) {
+//             // Root position derivative is always identity
+//             // TODO: precompute point-to-assigned-joint vector, reduce 3 flops
+//             // CloudType pointVecs;
+//             Eigen::Matrix<double, 3, 4> dRot;
+//             // Eigen::Matrix3d vCross;
+//             Eigen::Vector3d v;
+//             for (size_t i = 0; i < commonData.ancestor[pointId].size(); ++i) {
+//                 // Set derivative for each parent rotation
+//                 auto &ances = commonData.ancestor[pointId][i];
+//                 int j = ances.jid;  // 'middle' joint we are differenting wrt
+//                 v.setZero();
+//                 for (int assign = 0; assign < ances.num_assign; ++assign) {
+//                     // up to 4 inner loops
+//                     int k = ances.assign[assign];  // 'outer' joint assigned to
+//                                                    // the point
+//                     v += ances.weight[assign] *
+//                          (commonData.R(j, k) *
+//                               (pointPosInit - commonData.jointPosInit.col(k)) +
+//                           commonData.t(j, k));
+//                 }
+//                 // std::cerr <<v.transpose<< "\n"
+//                 Eigen::Quaterniond &q = opt.r[j];
+//                 Eigen::Vector3d u = q.vec() * 2;
+//                 // Quaternion-vector rotation (pseudo-)Jacobian
+//                 double w = q.w() * 2;
+//                 dRot.setZero();
+//                 dRot << u(1) * v(1) + v(2) * u(2),
+//                     w * v(2) + u(0) * v(1) - 2 * u(1) * v(0),
+//                     -w * v(1) - 2 * v(0) * u(2) + u(0) * v(2),
+//                     u(1) * v(2) - v(1) * u(2),
+//                     -w * v(2) - 2 * u(0) * v(1) + v(0) * u(1),
+//                     v(2) * u(2) + u(0) * v(0),
+//                     w * v(0) + u(1) * v(2) - 2 * v(1) * u(2),
+//                     v(0) * u(2) - u(0) * v(2),
+//                     w * v(1) + v(0) * u(2) - 2 * u(0) * v(2),
+//                     -w * v(0) - 2 * u(1) * v(2) + v(1) * u(2),
+//                     u(0) * v(0) + v(1) * u(1), u(0) * v(1) - v(0) * u(1);
+//                 icpJacobian[i].setZero();
+//                 icpJacobian[i].noalias() =
+//                     commonData.R(-1, ava.model.parent[j]) * dRot
+// #ifndef TEST_COMPARE_AUTO_DIFF
+//                     * commonData.localJacobian[j]
+// #endif
+//                     ;
+//             }
+//             if (commonData.shapeEnabled) {
+//                 icpShapeJacobian.setZero();
+//                 for (const std::pair<double, int> &assign :
+//                      ava.model.assignedJoints[pointId]) {
+//                     const int j = assign.second;
+//                     auto pointDeltas =
+//                         ava.model.keyClouds.middleRows<3>(pointId * 3);
+//                     icpShapeJacobian +=
+//                         (commonData.R(-1, j) * (pointDeltas - commonData.S[j]) +
+//                          commonData.H[j]) *
+//                         assign.first;
+//                 }
+//             }
+//         }
+//     }
+//     Eigen::Vector3d resid;
+// #ifdef TEST_COMPARE_AUTO_DIFF
+//     // For comparing with auto diff, we cannot multiply by the
+//     // local param jacobian or result would not be comparable
+//     std::vector<
+//         Eigen::Matrix<double, 3, 4, Eigen::RowMajor>,
+//         Eigen::aligned_allocator<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>>>
+//         icpJacobian;
+// #else
+//     std::vector<
+//         Eigen::Matrix<double, 3, 3, Eigen::RowMajor>,
+//         Eigen::aligned_allocator<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>>
+//         icpJacobian;
+// #endif
 
-    bool getICPJacobians(double *residuals, double **jacobians) const {
-        Eigen::Map<Eigen::Vector3d> residualMap(residuals);
-        residualMap.noalias() = resid;
-        if (jacobians != nullptr) {
-            if (jacobians[0] != nullptr) {
-                Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> J(
-                    jacobians[0]);
-                J.setIdentity();
-            }
-            size_t i = 0;
-            for (; i < commonData.ancestor[pointId].size(); ++i) {
-                if (jacobians[i + 1] != nullptr) {
-                    Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> J(
-                        jacobians[i + 1]);
-#ifdef TEST_COMPARE_AUTO_DIFF
-                    J.noalias() = icpJacobian[i];
-#else
-                    J.topLeftCorner<3, 3>().noalias() = icpJacobian[i];
-                    J.rightCols<1>().setZero();
-#endif
-                }
-            }
-            if (commonData.shapeEnabled && jacobians[i + 1] != nullptr) {
-                Eigen::Map<
-                    Eigen::Matrix<double, 3, Eigen::Dynamic, Eigen::RowMajor>>
-                    J(jacobians[i + 1], 3, ava.model.numShapeKeys());
-                J.noalias() = icpShapeJacobian;
-            }
-        }
-        return true;
-    }
+//     Eigen::Matrix<double, 3, Eigen::Dynamic, Eigen::RowMajor> icpShapeJacobian;
 
-    void updateData(bool compute_jacobians) {
-        auto pointPosInit = commonData.shapedCloud.col(pointId);
-        resid.setZero();
-        for (auto &assign : ava.model.assignedJoints[pointId]) {
-            int k = assign.second;
-            resid += assign.first *
-                     (commonData.R(-1, k) *
-                          (pointPosInit - commonData.jointPosInit.col(k)) +
-                      commonData.t(-1, k));
-        }
-        if (compute_jacobians) {
-            // Root position derivative is always identity
-            // TODO: precompute point-to-assigned-joint vector, reduce 3 flops
-            // CloudType pointVecs;
-
-            Eigen::Matrix<double, 3, 4> dRot;
-            // Eigen::Matrix3d vCross;
-            Eigen::Vector3d v;
-
-            for (size_t i = 0; i < commonData.ancestor[pointId].size(); ++i) {
-                // Set derivative for each parent rotation
-                auto &ances = commonData.ancestor[pointId][i];
-                int j = ances.jid;  // 'middle' joint we are differenting wrt
-
-                v.setZero();
-                for (int assign = 0; assign < ances.num_assign; ++assign) {
-                    // up to 4 inner loops
-                    int k = ances.assign[assign];  // 'outer' joint assigned to
-                                                   // the point
-                    v += ances.weight[assign] *
-                         (commonData.R(j, k) *
-                              (pointPosInit - commonData.jointPosInit.col(k)) +
-                          commonData.t(j, k));
-                }
-                // std::cerr <<v.transpose<< "\n"
-
-                Eigen::Quaterniond &q = opt.r[j];
-                Eigen::Vector3d u = q.vec() * 2;
-                // Quaternion-vector rotation (pseudo-)Jacobian
-                double w = q.w() * 2;
-                dRot.setZero();
-                dRot << u(1) * v(1) + v(2) * u(2),
-                    w * v(2) + u(0) * v(1) - 2 * u(1) * v(0),
-                    -w * v(1) - 2 * v(0) * u(2) + u(0) * v(2),
-                    u(1) * v(2) - v(1) * u(2),
-
-                    -w * v(2) - 2 * u(0) * v(1) + v(0) * u(1),
-                    v(2) * u(2) + u(0) * v(0),
-                    w * v(0) + u(1) * v(2) - 2 * v(1) * u(2),
-                    v(0) * u(2) - u(0) * v(2),
-
-                    w * v(1) + v(0) * u(2) - 2 * u(0) * v(2),
-                    -w * v(0) - 2 * u(1) * v(2) + v(1) * u(2),
-                    u(0) * v(0) + v(1) * u(1), u(0) * v(1) - v(0) * u(1);
-                icpJacobian[i].setZero();
-                icpJacobian[i].noalias() =
-                    commonData.R(-1, ava.model.parent[j]) * dRot
-#ifndef TEST_COMPARE_AUTO_DIFF
-                    * commonData.localJacobian[j]
-#endif
-                    ;
-            }
-
-            if (commonData.shapeEnabled) {
-                icpShapeJacobian.setZero();
-                for (const std::pair<double, int> &assign :
-                     ava.model.assignedJoints[pointId]) {
-                    const int j = assign.second;
-                    auto pointDeltas =
-                        ava.model.keyClouds.middleRows<3>(pointId * 3);
-                    icpShapeJacobian +=
-                        (commonData.R(-1, j) * (pointDeltas - commonData.S[j]) +
-                         commonData.H[j]) *
-                        assign.first;
-                }
-            }
-        }
-    }
-
-    Eigen::Vector3d resid;
-#ifdef TEST_COMPARE_AUTO_DIFF
-    // For comparing with auto diff, we cannot multiply by the
-    // local param jacobian or result would not be comparable
-    std::vector<
-        Eigen::Matrix<double, 3, 4, Eigen::RowMajor>,
-        Eigen::aligned_allocator<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>>>
-        icpJacobian;
-#else
-    std::vector<
-        Eigen::Matrix<double, 3, 3, Eigen::RowMajor>,
-        Eigen::aligned_allocator<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>>
-        icpJacobian;
-#endif
-
-    Eigen::Matrix<double, 3, Eigen::Dynamic, Eigen::RowMajor> icpShapeJacobian;
-
-    Avatar &ava;
-    AvatarOptimizer &opt;
-    AvatarEvaluationCommonData<AvatarCostFunctorCache> &commonData;
-    int pointId;
-};
+//     Avatar &ava;
+//     AvatarOptimizer &opt;
+//     AvatarEvaluationCommonData<AvatarCostFunctorCache> &commonData;
+//     int pointId;
+// };
 
 /** Ceres analytic derivative cost function for ICP error.
  *  Works for pose parameters only. */
@@ -725,7 +717,92 @@ struct AvatarShapePriorCostFunctor : ceres::CostFunction {
     const double betaShape;
 };
 
+struct Kps2dAutoDiffCostFunctor {
+    Kps2dAutoDiffCostFunctor(
+        AvatarEvaluationCommonData &common_data, cnpy::npz_t kps2d_gt)
+        : commonData(common_data),
+          kps2dGT(kps2d_gt) {
+        // pointId = commonData.caches[cacheId].pointId;
+    }
+    template <typename T>
+    bool operator()(const T* const params, T *residual) const {
 
+        Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(
+            3, commonData.ava.model.numPoints());
+        Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> cloudVec(
+            cloud.data(), cloud.rows() * cloud.cols());
+
+        if (commonData.shapeEnabled) {
+            Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
+                params+commonData.ava.model.numJoints() + 1,
+                16, 1);
+            cloudVec.noalias() =
+                commonData.ava.model.keyClouds.cast<T>() * wMap +
+                commonData.ava.model.baseCloud;
+        } else {
+            cloudVec.noalias() = commonData.ava.model.keyClouds.cast<T>() *
+                                     commonData.ava.w.cast<T>() +
+                                 commonData.ava.model.baseCloud;
+        }
+
+        Eigen::Matrix<T, 3, Eigen::Dynamic> jointPos =
+            cloud * commonData.ava.model.jointRegressor.cast<T>();
+
+        if (commonData.ava.model.useJointShapeRegressor) {
+            jointPos.resize(3, commonData.ava.model.numJoints());
+            Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> jointPosVec(
+                jointPos.data(), 3 * commonData.ava.model.numJoints());
+
+            if (commonData.shapeEnabled) {
+                Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
+                    params[commonData.ava.model.numJoints() + 1],
+                    commonData.ava.model.numShapeKeys(), 1);
+                jointPosVec.noalias() =
+                    commonData.ava.model.jointShapeRegBase.cast<T>() +
+                    commonData.ava.model.jointShapeReg.cast<T>() * wMap;
+            } else {
+                jointPosVec.noalias() =
+                    commonData.ava.model.jointShapeRegBase.cast<T>() +
+                    commonData.ava.model.jointShapeReg.cast<T>() *
+                        commonData.ava.w.cast<T>();
+            }
+        } else {
+            jointPos.noalias() =
+                cloud * commonData.ava.model.jointRegressor.cast<T>();
+        }
+
+        
+        // process prediction
+        Eigen::Matrix<T, 3, Eigen::Dynamic> projectedJoints(
+            3, commonData.ava.model.numJoints());
+        for (size_t i = 0; i < jointPos.cols(); ++i) {
+            Eigen::Matrix<T, 3, 1> pt = jointPos.col(i);
+            projectedJoints(0, i) = pt(0) * commonData.intrin.fx / pt(2) + commonData.intrin.cx;
+            projectedJoints(1, i) = pt(1) * commonData.intrin.fy / pt(2) + commonData.intrin.cy;
+        }
+
+
+        // process gt
+        Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints(
+            3, commonData.ava.model.numJoints());
+        const auto& hand_right_raw = kps2dGT.at("right");
+        Eigen::SparseMatrix<double> hand_right_kps2d;
+        hand_right_kps2d.resize(21, 3);
+        hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3).sparseView();
+        const auto& hand_left_raw = kps2dGT.at("left");
+        Eigen::SparseMatrix<double> hand_left_kps2d;
+        hand_left_kps2d.resize(21, 3);
+        hand_left_kps2d = util::loadFloatMatrix(hand_left_raw, 21, 3).sparseView();
+        gtJoints.col(18) = hand_left_kps2d.col(0);
+        gtJoints.col(19) = hand_right_kps2d.col(0);
+
+        residual[0] =  ((projectedJoints - gtJoints.topRows(2)).cwiseAbs2().colwise().sum() * gtJoints.row(2)).sum();
+
+        return true;
+    }
+    AvatarEvaluationCommonData &commonData;
+    cnpy::npz_t kps2dGT;
+};
 
 #ifdef TEST_COMPARE_AUTO_DIFF
 /** Auto diff cost function w/ derivative for Ceres
@@ -1250,7 +1327,7 @@ AvatarOptimizer::AvatarOptimizer(Avatar &ava, const CameraIntrin &intrin,
     
 }
 
-void AvatarOptimizer::optimize(int icp_iters, int num_threads) {
+void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_threads) {
     // Convert to quaternion
     for (int i = 0; i < ava.model.numJoints(); ++i) {
         Eigen::AngleAxisd aa;
@@ -1258,7 +1335,7 @@ void AvatarOptimizer::optimize(int icp_iters, int num_threads) {
         r[i] = aa;
     }
 
-    AvatarEvaluationCommonData<AvatarCostFunctorCache> common(*this, true);
+    AvatarEvaluationCommonData common(*this, intrin, true);
     common.numThreads = num_threads;  // boost::thread::hardware_concurrency();;
     // std::vector<std::vector<int>> correspondences;
 
@@ -1348,6 +1425,17 @@ void AvatarOptimizer::optimize(int icp_iters, int num_threads) {
         std::fill(pointVisible.begin(), pointVisible.end(), true);
     }
 
+
+    const auto& hand_right_raw = kps2d_gt.at("right");
+    util::assertShape(hand_right_raw, {1, 21, 3});
+    Eigen::SparseMatrix<double> hand_right_kps2d;
+    hand_right_kps2d.resize(21, 3);
+    hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3)
+                         .sparseView();
+    hand_right_kps2d.makeCompressed();
+    std::cout<<hand_right_kps2d<<std::endl;
+    // getchar();
+
     for (int icp_iter = 0; icp_iter < icp_iters; ++icp_iter) {
         // Perform point cloud occlusion detection
         BEGIN_PROFILE;
@@ -1418,22 +1506,22 @@ void AvatarOptimizer::optimize(int icp_iters, int num_threads) {
             problem.AddParameterBlock(ava.w.data(), ava.model.numShapeKeys());
         }
         PROFILE(>> Construct problem : parameter blocks);
-        common.caches.clear();
-        // std::vector<std::tuple<ceres::ResidualBlockId, int, int> > residuals;
-        std::vector<std::vector<double *>> pointParams(ava.model.numPoints());
-        for (int i = 0; i < ava.model.numPoints(); ++i) {
-            // if (correspondences[i].empty()) continue;
-            auto &params = pointParams[i];
-            common.caches.emplace_back(common, i);
-            params.reserve(common.ancestor[i].size() + 1);
-            params.push_back(ava.p.data());
-            for (auto &ances : common.ancestor[i]) {
-                params.push_back(r[ances.jid].coeffs().data());
-            }
-            if (common.shapeEnabled) {
-                params.push_back(ava.w.data());
-            }
-        }
+        // common.caches.clear();
+        // // std::vector<std::tuple<ceres::ResidualBlockId, int, int> > residuals;
+        // std::vector<std::vector<double *>> pointParams(ava.model.numPoints());
+        // for (int i = 0; i < ava.model.numPoints(); ++i) {
+        //     // if (correspondences[i].empty()) continue;
+        //     auto &params = pointParams[i];
+        //     common.caches.emplace_back(common, i);
+        //     params.reserve(common.ancestor[i].size() + 1);
+        //     params.push_back(ava.p.data());
+        //     for (auto &ances : common.ancestor[i]) {
+        //         params.push_back(r[ances.jid].coeffs().data());
+        //     }
+        //     if (common.shapeEnabled) {
+        //         params.push_back(ava.w.data());
+        //     }
+        // }
 
         // // DEBUG
         // std::vector<double*> params;
@@ -1454,9 +1542,22 @@ void AvatarOptimizer::optimize(int icp_iters, int num_threads) {
         //     }
         //     ++cid;
         // }
-        
-        // CostFunction* kps2d_cost_function = new AutoDiffCostFunction<Kps2dCostFunctor, 1, ava.r.size()>(new Kps2dCostFunctor(kps2d_pre, kps2d_gt));
-        // problem.AddResidualBlock(kps2d_cost_function, NULL, ava.r)
+
+        std::vector<double *> fullParams;
+        fullParams.push_back(ava.p.data());
+        for (int i = 0; i < ava.model.numJoints(); ++i) {
+            fullParams.push_back(r[i].coeffs().data());
+        }
+
+        if (common.shapeEnabled) {
+            fullParams.push_back(ava.w.data());
+        }
+        std::cout << fullParams.size()<<std::endl;
+        getchar();
+        const int fullParamsNum = 227;
+        ceres::CostFunction* kps2d_cost_function = new AutoDiffCostFunction<Kps2dAutoDiffCostFunctor, 1, fullParamsNum>(
+                                                new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
+        problem.AddResidualBlock(kps2d_cost_function, NULL, fullParams);
 
         /** Scale the function weights according to number of ICP type
          * residuals. Otherwise the function terms become extremely imbalanced

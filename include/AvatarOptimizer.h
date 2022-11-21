@@ -4,6 +4,7 @@
 #include <Eigen/Geometry>
 #include <Eigen/StdVector>
 #include "Calibration.h"
+#include <cnpy.h>
 
 namespace ark {
     class Avatar;
@@ -14,7 +15,7 @@ namespace ark {
         AvatarOptimizer(Avatar& ava, const CameraIntrin& intrin, const cv::Size& image_size);
 
         /** Begin full optimization on the target data cloud */
-        void optimize(
+        void optimize(cnpy::npz_t kps2d, 
                 int icp_iters = 1, int num_threads = 4);
 
         /** Rotation representation size */

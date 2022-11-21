@@ -138,11 +138,10 @@ int main(int argc, char** argv) {
     // ark::RTree rtree(rtreePath);
 
     ark::AvatarModel avaModel;
-    // std::cout<<"#####2\n";
     ark::Avatar ava(avaModel);
-    // std::cout<<"#####3\n";
     ark::AvatarOptimizer avaOpt(ava, intrin, background.size());
-    // std::cout<<"#####4\n";
+    // std::cout << background.size() << std::endl; // 1280 * 720
+    // getchar();
     // std::cout << ava.model.numJoints() << std::endl;
     // std::cout << ava.model.numPoints() << std::endl;
     // std::cout << ava.model.parent << std::endl;
@@ -197,7 +196,7 @@ int main(int argc, char** argv) {
             std::cerr << "WARNING: no more images found, exiting\n";
             break;
         }
-        std::string kps2d_npzPath = "../data/conference-room/annotation_" + ss_img_id.str() + ".npz";
+        std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_" + ss_img_id.str() + ".npz";
                             
         cnpy::npz_t hand_npz = cnpy::npz_load(kps2d_npzPath);
         // const auto hand_right = hand_npz["right_hand"];

@@ -197,7 +197,7 @@ int main(int argc, char** argv) {
             std::cerr << "WARNING: no more images found, exiting\n";
             break;
         }
-        std::string kps2d_npzPath = "../data/conference-room/annotation_" + ss_img_id.str() + ".npz";
+        std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_" + ss_img_id.str() + ".npz";
                             
         cnpy::npz_t hand_npz = cnpy::npz_load(kps2d_npzPath);
         // const auto hand_right = hand_npz["right_hand"];
@@ -370,7 +370,7 @@ int main(int argc, char** argv) {
         // cv::rectangle(vis, bgsub.topLeft, bgsub.botRight,
         // cv::Scalar(0,0,255));
 
-        cv::imshow("Visual", vis);
+        // cv::imshow("Visual", vis);
         // cv::imshow("Depth", depth);
         ++imId;
         int k = cv::waitKey(1);

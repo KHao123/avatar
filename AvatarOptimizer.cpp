@@ -734,8 +734,8 @@ struct Kps2dAutoDiffCostFunctor {
 
         if (commonData.shapeEnabled) {
             Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
-                params+commonData.ava.model.numJoints() + 1,
-                16, 1);
+                params[commonData.ava.model.numJoints() + 1],
+                commonData.ava.model.numShapeKeys(), 1);
             cloudVec.noalias() =
                 commonData.ava.model.keyClouds.cast<T>() * wMap +
                 commonData.ava.model.baseCloud;

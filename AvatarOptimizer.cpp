@@ -724,8 +724,8 @@ struct Kps2dAutoDiffCostFunctor {
           kps2dGT(kps2d_gt) {
         // pointId = commonData.caches[cacheId].pointId;
     }
-    template <typename T>
-    bool operator()(const T* const params, T *residual) const {
+    template <class T>
+    bool operator()(T const *const *params, T *residual) const {
 
         Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(
             3, commonData.ava.model.numPoints());
@@ -1431,7 +1431,7 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
     hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3)
                          .sparseView();
     hand_right_kps2d.makeCompressed();
-    std::cout<<hand_right_kps2d<<std::endl;
+    // std::cout<<hand_right_kps2d<<std::endl;
     // getchar();
 
     for (int icp_iter = 0; icp_iter < icp_iters; ++icp_iter) {
@@ -1541,6 +1541,25 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         //     ++cid;
         // }
 
+        
+        // const int fullParamsNum = 227;
+        // ceres::CostFunction* kps2d_cost_function = new AutoDiffCostFunction<Kps2dAutoDiffCostFunctor, 1, fullParamsNum>(
+        //                                         new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
+
+        DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor> *kps2d_cost_function =
+            new DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor>(
+                new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
+
+        kps2d_cost_function->AddParameterBlock(3);
+        for (int k = 0; k < ava.model.numJoints(); ++k) {
+            kps2d_cost_function->AddParameterBlock(4);
+        }
+        if (common.shapeEnabled) {
+            kps2d_cost_function->AddParameterBlock(ava.model.numShapeKeys());
+        }
+        kps2d_cost_function->SetNumResiduals(3);
+
+
         std::vector<double *> fullParams;
         fullParams.push_back(ava.p.data());
         for (int i = 0; i < ava.model.numJoints(); ++i) {
@@ -1550,11 +1569,8 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         if (common.shapeEnabled) {
             fullParams.push_back(ava.w.data());
         }
-        std::cout << fullParams.size()<<std::endl;
-        getchar();
-        const int fullParamsNum = 227;
-        ceres::CostFunction* kps2d_cost_function = new AutoDiffCostFunction<Kps2dAutoDiffCostFunctor, 1, fullParamsNum>(
-                                                new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
+        // std::cout << fullParams.size()<<std::endl;
+        // getchar();
         problem.AddResidualBlock(kps2d_cost_function, NULL, fullParams);
 
         /** Scale the function weights according to number of ICP type

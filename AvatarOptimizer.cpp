@@ -777,8 +777,8 @@ struct Kps2dAutoDiffCostFunctor {
             3, commonData.ava.model.numJoints());
         for (size_t i = 0; i < jointPos.cols(); ++i) {
             Eigen::Matrix<T, 3, 1> pt = jointPos.col(i);
-            projectedJoints(0, i) = pt(0) * commonData.intrin.fx / pt(2) + commonData.intrin.cx;
-            projectedJoints(1, i) = pt(1) * commonData.intrin.fy / pt(2) + commonData.intrin.cy;
+            projectedJoints(0, i) = pt(0) * (T)commonData.intrin.fx / pt(2) + (T)commonData.intrin.cx;
+            projectedJoints(1, i) = pt(1) * (T)commonData.intrin.fy / pt(2) + (T)commonData.intrin.cy;
         }
 
 
@@ -1299,13 +1299,11 @@ AvatarOptimizer::AvatarOptimizer(Avatar &ava, const CameraIntrin &intrin,
       imageSize(image_size)
       {
     r.resize(ava.model.numJoints());
-    std::cout<<"#####33\n";
     // std::cout<<numParts;
     // modelPartIndices.resize(numParts);
     // modelPartLabelCounts.resize(numParts);
     // modelPartClouds.resize(numParts);
     // modelPartLabelCounts.setZero();
-    std::cout<<"#####34\n";
     // for (size_t i = 0; i < ava.model.numPoints(); ++i) {
     //     int mainJointId = ava.model.assignedJoints[i][0].second;
     //     ++modelPartLabelCounts(partMap[mainJointId]);

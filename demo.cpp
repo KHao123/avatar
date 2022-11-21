@@ -369,7 +369,7 @@ int main(int argc, char** argv) {
         // cv::rectangle(vis, bgsub.topLeft, bgsub.botRight,
         // cv::Scalar(0,0,255));
 
-        cv::imshow("Visual", vis);
+        // cv::imshow("Visual", vis);
         // cv::imshow("Depth", depth);
         ++imId;
         int k = cv::waitKey(1);

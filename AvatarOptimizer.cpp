@@ -804,7 +804,7 @@ struct Kps2dAutoDiffCostFunctor {
     cnpy::npz_t kps2dGT;
 };
 
-#ifdef TEST_COMPARE_AUTO_DIFF
+// #ifdef TEST_COMPARE_AUTO_DIFF
 /** Auto diff cost function w/ derivative for Ceres
  *  (Extremely poorly optimized, used for checking correctness of analytic
  * derivative) */
@@ -903,7 +903,7 @@ struct Kps2dAutoDiffCostFunctor {
 //     size_t cacheId;
 //     AvatarEvaluationCommonData<AvatarCostFunctorCache> &commonData;
 // };
-#endif  // TEST_COMPARE_AUTO_DIFF
+// #endif  // TEST_COMPARE_AUTO_DIFF
 
 typedef nanoflann::KDTreeEigenColMajorMatrixAdaptor<CloudType, 3,
                                                     nanoflann::metric_L2_Simple>

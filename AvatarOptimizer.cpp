@@ -728,17 +728,32 @@ struct Kps2dAutoDiffCostFunctor {
     bool operator()(T const *const *params, T *residual) const {
         Eigen::Matrix<T, 3, Eigen::Dynamic> shapedCloud(
             3, commonData.ava.model.numPoints());
-        Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> shapedCloudVec(
-            shapedCloud.data(), commonData.ava.model.numShapeKeys());
+        // Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> shapedCloudVec(
+        //     shapedCloud.data(), commonData.ava.model.numShapeKeys());
+        Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> shapedCloudVec(shapedCloud.data(),
+                                                   3 * shapedCloud.cols());
 
+        // init baseCloud
+        Eigen::Matrix<double, Eigen::Dynamic, 1> baseCloud(
+            3 * shapedCloud.cols());
+        baseCloud = commonData.ava.model.baseCloud;
+
+        // init keyClouds
+        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> keyClouds(
+            3 * shapedCloud.cols(), commonData.ava.model.numShapeKeys());
+        keyClouds = commonData.ava.model.keyClouds;
+
+        // Eigen::Matrix<double, Eigen::Dynamic, 1> debug_gt(
+        //         commonData.ava.model.numShapeKeys(), 1);
         Eigen::Matrix<double, Eigen::Dynamic, 1> debug_gt(
-                commonData.ava.model.numShapeKeys(), 1);
+                3 * shapedCloud.cols(), 1);
         debug_gt.setConstant(1);
         debug_gt *= 2;
         // debug_gt.array() += 100;
         // debug_gt << 100;
         // std::cout << "gt:\n"<<debug_gt << std::endl;
-        
+
+
         // residual[0] = (wMap-debug_gt).sum();
         /** Apply shape keys */
         Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
@@ -748,11 +763,21 @@ struct Kps2dAutoDiffCostFunctor {
         Eigen::Matrix<double, Eigen::Dynamic, 1> debug_coeff(
                 commonData.ava.model.numShapeKeys(), 1);
         debug_coeff.setConstant(5);
-        // wMap = debug_coeff + wMap;
-        shapedCloudVec += wMap;
         
+        std::cout << "keyClouds: " <<commonData.ava.model.keyClouds.rows() << " " << commonData.ava.model.keyClouds.cols() << std::endl;
+        std::cout << "baseCloud: " <<commonData.ava.model.baseCloud.rows() << " " << commonData.ava.model.baseCloud.cols() << std::endl;
+        std::cout << "wMap: " << wMap.rows() << " " << wMap.cols() << std::endl;
+
+        // wMap = debug_coeff + wMap;
+        // shapedCloudVec += commonData.ava.model.keyClouds * wMap;
+        // shapedCloudVec = keyClouds * wMap + baseCloud;
+        shapedCloudVec = keyClouds * wMap + baseCloud;
+        // shapedCloudVec *= commonData.ava.model.keyClouds;
+        // shapedCloudVec.noalias() = model.keyClouds * w + model.baseCloud;
+
+
         // // _ARK_PROFILE(SHAPE);
-        residual[0] = (shapedCloudVec - debug_gt).sum();
+        residual[0] = (shapedCloudVec - debug_gt).cwiseAbs2().sum();
         // /** Apply joint [shape] regressor */
         // Eigen::Matrix<T, 3, Eigen::Dynamic> jointPos =
         //     shapedCloud * commonData.ava.model.jointRegressor.cast<T>();

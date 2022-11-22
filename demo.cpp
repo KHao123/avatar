@@ -291,8 +291,11 @@ int main(int argc, char** argv) {
                     if (reinit) {
                         Eigen::Vector3d cloudCen = dataCloud.rowwise().mean();
                         ava.p = cloudCen;
-                        ava.w.setZero();
-                        for (int i = 1; i < ava.model.numJoints(); ++i) {
+                        for (int i = 0; i < ava.model.numShapeKeys(); ++i) {
+                            ava.w[i] = 100;
+                        }
+                        // ava.w.setZero();
+                        for (int i = 0; i < ava.model.numJoints(); ++i) {
                             ava.r[i].setIdentity();
                         }
                         ava.r[0] =

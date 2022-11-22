@@ -196,7 +196,8 @@ int main(int argc, char** argv) {
             std::cerr << "WARNING: no more images found, exiting\n";
             break;
         }
-        std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_" + ss_img_id.str() + ".npz";
+        // std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_" + ss_img_id.str() + ".npz";
+        std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_0158.npz";
                             
         cnpy::npz_t hand_npz = cnpy::npz_load(kps2d_npzPath);
         // const auto hand_right = hand_npz["right_hand"];
@@ -292,17 +293,13 @@ int main(int argc, char** argv) {
                         Eigen::Vector3d cloudCen = dataCloud.rowwise().mean();
                         ava.p = cloudCen;
                         ava.w.setZero();
-                        for (int i = 1; i < ava.model.numJoints(); ++i) {
+                        for (int i = 0; i < ava.model.numJoints(); ++i) {
                             ava.r[i].setIdentity();
                         }
                         ava.r[0] =
                             Eigen::AngleAxisd(M_PI, Eigen::Vector3d(0, 1, 0))
                                 .toRotationMatrix();
                         // reinit = false;
-                        // ava.r[/*r knee*/ 5] = Eigen::AngleAxisd(0.5*M_PI, Eigen::Vector3d(1, 0, 0))
-                        //         .toRotationMatrix();
-                        // ava.r[/*r knee*/ 34] = Eigen::AngleAxisd(0.5*M_PI, Eigen::Vector3d(0, 1, 0))
-                        //         .toRotationMatrix();
                         ava.update();
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);
@@ -369,7 +366,7 @@ int main(int argc, char** argv) {
         // cv::rectangle(vis, bgsub.topLeft, bgsub.botRight,
         // cv::Scalar(0,0,255));
 
-        // cv::imshow("Visual", vis);
+        cv::imshow("Visual", vis);
         // cv::imshow("Depth", depth);
         ++imId;
         int k = cv::waitKey(1);

@@ -798,12 +798,6 @@ struct Kps2dAutoDiffCostFunctor {
         // jointPosFinal = cloud * jointRegressor.cast<T>(); // very slow
         jointPosFinal = cloud * commonData.ava.model.jointRegressor;
         
-        // std::cout<<"rmap:\n"<<rMap.col(0)<<std::endl;
-        Eigen::Matrix<double, 3, Eigen::Dynamic> debug_gt(
-                3 , commonData.ava.model.numJoints());
-        debug_gt.setConstant(1);
-        residual[0] = (jointPosFinal - debug_gt).cwiseAbs2().sum();
-        
         // process prediction
         Eigen::Matrix<T, 2, Eigen::Dynamic> projectedJoints(
             2, commonData.ava.model.numJoints());
@@ -832,10 +826,14 @@ struct Kps2dAutoDiffCostFunctor {
         // only wrist for debug
         gtJoints.col(18) = hand_left_kps2d.col(0);
         gtJoints.col(19) = hand_right_kps2d.col(0);
-
+        // std::cout << "left hand\n" << hand_left_kps2d.col(0) <<std::endl;
+        // std::cout<<"gtjoint:\n"<<gtJoints<<std::endl;
         // gtJoints.array() += 100;
-
-        // residual[0] =  ((projectedJoints - gtJoints.topRows(2)).cwiseAbs2().colwise().sum().cwiseSqrt().cwiseProduct(gtJoints.row(2))).sum();
+        // Eigen::Matrix<double, 3, Eigen::Dynamic> debug_gt(
+        //         3 , commonData.ava.model.numJoints());
+        // debug_gt.setConstant(1);
+        // residual[0] = (jointPosFinal - debug_gt).cwiseAbs2().sum();
+        residual[0] =  ((projectedJoints - gtJoints.topRows(2)).cwiseAbs2().colwise().sum().cwiseSqrt().cwiseProduct(gtJoints.row(2))).sum();
 
         return true;
     }
@@ -1474,7 +1472,7 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
     // std::cout<<hand_right_kps2d<<std::endl;
     // getchar();
 
-    for (int icp_iter = 0; icp_iter < 1; ++icp_iter) {
+    for (int icp_iter = 0; icp_iter < 3; ++icp_iter) {
         // Perform point cloud occlusion detection
         BEGIN_PROFILE;
         if (enableOcclusion) {
@@ -1653,16 +1651,13 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         ceres::Solve(options, &problem, &summary);  // 35 ms
 
         PROFILE(>> Solve);
-        std::cout << "initial r:\n" << r[0].coeffs().transpose() <<std::endl;
-        std::cout<< "debug transl: \n" << ava.p.transpose() << std::endl;
+        // std::cout << "initial r:\n" << r[0].coeffs().transpose() <<std::endl;
+        // std::cout<< "debug transl: \n" << ava.p.transpose() << std::endl;
         // std::cout<< "debug pose: \n" << r.transpose() << std::endl;
-        std::cout<< "debug shape: \n" << ava.w.transpose() << std::endl;
+        // std::cout<< "debug shape: \n" << ava.w.transpose() << std::endl;
         // output (for debugging)
-        std::cout << summary.FullReport() << "\n";
-        // std::cout << summary.BriefReport() << "\n";
-        // std::cout << "x : " << initial_x
-        //             << " -> " << x << "\n";
-        getchar();
+        // std::cout << summary.FullReport() << "\n";
+        
 
         // Convert from quaternion
         for (int i = 0; i < ava.model.numJoints(); ++i) {
@@ -1670,6 +1665,16 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         }
         ava.update();
         PROFILE(>> Finish);
+
+        std::cout << summary.BriefReport() << "\n";
+        Eigen::Matrix<double, 2, 1> projectedJoints(
+            2,1);
+        Eigen::Matrix<double, 3, 1> pt = ava.jointPos.col(18);
+        projectedJoints(0, 0) = pt(0) * common.intrin.fx / pt(2) + common.intrin.cx;
+        projectedJoints(1, 0) = pt(1) * common.intrin.fy / pt(2) + common.intrin.cy;
+        std::cout << "wrist : " << projectedJoints.transpose()
+                    << " -> " <<  "354,361" << "\n";
+        getchar();
         // std::cout << ava.w.transpose() << "\n";
 
         /*

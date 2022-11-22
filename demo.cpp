@@ -196,7 +196,8 @@ int main(int argc, char** argv) {
             std::cerr << "WARNING: no more images found, exiting\n";
             break;
         }
-        std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_" + ss_img_id.str() + ".npz";
+        // std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_" + ss_img_id.str() + ".npz";
+        std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_0158.npz";
                             
         cnpy::npz_t hand_npz = cnpy::npz_load(kps2d_npzPath);
         // const auto hand_right = hand_npz["right_hand"];
@@ -291,10 +292,7 @@ int main(int argc, char** argv) {
                     if (reinit) {
                         Eigen::Vector3d cloudCen = dataCloud.rowwise().mean();
                         ava.p = cloudCen;
-                        for (int i = 0; i < ava.model.numShapeKeys(); ++i) {
-                            ava.w[i] = 100;
-                        }
-                        // ava.w.setZero();
+                        ava.w.setZero();
                         for (int i = 0; i < ava.model.numJoints(); ++i) {
                             ava.r[i].setIdentity();
                         }
@@ -302,10 +300,6 @@ int main(int argc, char** argv) {
                             Eigen::AngleAxisd(M_PI, Eigen::Vector3d(0, 1, 0))
                                 .toRotationMatrix();
                         // reinit = false;
-                        // ava.r[/*r knee*/ 5] = Eigen::AngleAxisd(0.5*M_PI, Eigen::Vector3d(1, 0, 0))
-                        //         .toRotationMatrix();
-                        // ava.r[/*r knee*/ 34] = Eigen::AngleAxisd(0.5*M_PI, Eigen::Vector3d(0, 1, 0))
-                        //         .toRotationMatrix();
                         ava.update();
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);

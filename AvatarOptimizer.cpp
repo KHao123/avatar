@@ -759,128 +759,79 @@ struct Kps2dAutoDiffCostFunctor {
         using ConstQuatMap = Eigen::Map<const Eigen::Quaternion<T>>;
         using ConstVecMap = Eigen::Map<const Eigen::Matrix<T, 3, 1>>;
 
-        Eigen::Map<const Eigen::Matrix<T, 4, Eigen::Dynamic>> rMap(
-                params[1],
-                4, commonData.ava.model.numJoints());
+        // Eigen::Map<const Eigen::Matrix<T, 4, Eigen::Dynamic>> rMap(
+        //         params[1],
+        //         4, commonData.ava.model.numJoints());
 
         TransformMap jt0(jointTrans.data());
         jt0.leftCols(3) = ConstQuatMap(params[0 + 1]).toRotationMatrix();
-        // jt0.rightCols(1) = ConstVecMap(rootPos(params[0]));
+        jt0.rightCols(1) = ConstVecMap(params[0]); // Root position at center (non-standard!)
         
-        // jt0.rightCols<1>() = pMap;  // Root position at center (non-standard!)
-        // for (size_t i = 1; i < model.numJoints(); ++i) {
-        //     TransformMap jti(jointTrans.col(i).data());
-        //     jti.leftCols<3>().noalias() = r[i];
-        //     jti.rightCols<1>().noalias() =
-        //         jointPos.col(i) - jointPos.col(model.parent[i]);
-        //     util::mulAffine<double, Eigen::ColMajor>(
-        //         TransformMap(jointTrans.col(model.parent[i]).data()), jti);
-        // }
+        for (size_t i = 1; i < commonData.ava.model.numJoints(); ++i) {
+            TransformMap jti(jointTrans.col(i).data());
+            jti.leftCols(3) = ConstQuatMap(params[i + 1]).toRotationMatrix();
+            jti.rightCols(1) =
+                jointPos.col(i) - jointPos.col(commonData.ava.model.parent[i]);
+            util::mulAffine<T, Eigen::ColMajor>(
+                TransformMap(jointTrans.col(commonData.ava.model.parent[i]).data()), jti);
+        }
 
+        for (int i = 0; i < commonData.ava.model.numJoints(); ++i) {
+            TransformMap jti(jointTrans.col(i).data());
+            Eigen::Matrix<T, 3, 1> jPosInit = jointPos.col(i);
+            jointPos.col(i) = jti.rightCols(1);
+            jti.rightCols(1) -= jti.leftCols(3) * jPosInit;
+        }
+        
+        Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(3, commonData.ava.model.numPoints());
+        // init weight
+        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> weights(
+            commonData.ava.model.numJoints(), commonData.ava.model.numPoints());
+        weights = commonData.ava.model.weights;
+        Eigen::Matrix<T, 12, Eigen::Dynamic> pointTrans = jointTrans * weights.cast<T>();
+        for (size_t i = 0; i < commonData.ava.model.numPoints(); ++i) {
+            TransformMap pti(pointTrans.col(i).data());
+            cloud.col(i) = pti * shapedCloud.col(i).homogeneous();
+        }
+
+        Eigen::Matrix<T, 3, Eigen::Dynamic> jointPosFinal(3, commonData.ava.model.numJoints());
+        jointPosFinal = cloud * jointRegressor.cast<T>(); // very slow
+        
         // std::cout<<"rmap:\n"<<rMap.col(0)<<std::endl;
         Eigen::Matrix<double, 3, Eigen::Dynamic> debug_gt(
                 3 , commonData.ava.model.numJoints());
         debug_gt.setConstant(1);
-        residual[0] = (jointPos - debug_gt).cwiseAbs2().sum();
-        // /** Apply joint [shape] regressor */
-        // Eigen::Matrix<T, 3, Eigen::Dynamic> jointPos =
-        //     shapedCloud * commonData.ava.model.jointRegressor.cast<T>();
-
-        // if (false) {
-        //     jointPos.resize(3, commonData.ava.model.numJoints());
-        //     Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> jointPosVec(
-        //         jointPos.data(), 3 * commonData.ava.model.numJoints());
-
-        //     if (false) {
-        //         Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
-        //             params[commonData.ava.model.numJoints() + 1],
-        //             commonData.ava.model.numShapeKeys(), 1);
-        //         jointPosVec.noalias() =
-        //             commonData.ava.model.jointShapeRegBase.cast<T>() +
-        //             commonData.ava.model.jointShapeReg.cast<T>() * wMap;
-        //     } else {
-        //         jointPosVec.noalias() =
-        //             commonData.ava.model.jointShapeRegBase.cast<T>() +
-        //             commonData.ava.model.jointShapeReg.cast<T>() *
-        //                 commonData.ava.w.cast<T>();
-        //     }
-        // } else {
-        //     // jointPos.noalias() =
-        //     //     cloud * commonData.ava.model.jointRegressor.cast<T>();
-        // }
-
-        /** END of shape update, BEGIN pose update */
+        residual[0] = (jointPosFinal - debug_gt).cwiseAbs2().sum();
         
-        /** Compute each joint's transform */
-        // Eigen::Matrix<T, 12, Eigen::Dynamic> jointTrans(12, commonData.ava.model.numJoints());
-        // using VecMap3 = Eigen::Map<const Eigen::Matrix<T, 3, 1>>;
-        // using VecMap33 = Eigen::Map<const Eigen::Matrix<T, 3, 3>>;
-        // using TransformMap = Eigen::Map<const Eigen::Matrix<T, 3, 4>>;
-        // /** Root joint joints */
-        // TransformMap jt0(jointTrans);
-        // VecMap33 a(params[1], 3, 3);
-        // jt0.leftCols(3).noalias() = a; // 梯度是否回传
-        // VecMap3 b(params[0], 3, 1);
-        // jt0.rightCols(1) = b;  // Root position at center (non-standard!)
-        // for (size_t i = 1; i < commonData.ava.model.numJoints(); ++i) {
-        //     TransformMap jti(jointTrans.col(i));
-        //     VecMap33 c(params[i+1], 3, 3);
-        //     jti.leftCols(3).noalias() = c;
-        //     jti.rightCols(1).noalias() =
-        //         jointPos.col(i) - jointPos.col(commonData.ava.model.parent[i]);
-        //     util::mulAffine<T, Eigen::ColMajor>(
-        //         TransformMap(jointTrans.col(commonData.ava.model.parent[i])), jti);
-        // }
-
-        // for (int i = 0; i < commonData.ava.model.numJoints(); ++i) {
-        //     TransformMap jti(jointTrans.col(i));
-        //     Eigen::Matrix<T, 3, Eigen::Dynamic> jPosInit = jointPos.col(i);
-        //     jointPos.col(i).noalias() = jti.rightCols(1);
-        //     jti.rightCols(1).noalias() -= jti.leftCols(3) * jPosInit;
-        // }
-
-        // /** Compute each point's transform */
-        // Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(
-        //     3, commonData.ava.model.numPoints());
-
-        // Eigen::Matrix<T, 12, Eigen::Dynamic> pointTrans = jointTrans * commonData.ava.model.weights.cast<T>();
-        // for (size_t i = 0; i < commonData.ava.model.numPoints(); ++i) {
-        //     TransformMap pti(pointTrans.col(i));
-        //     cloud.col(i).noalias() = pti * shapedCloud.col(i).homogeneous();
-        // }
-
-        // Eigen::Matrix<T, 3, Eigen::Dynamic> finaljointPos =
-        //     cloud * commonData.ava.model.jointRegressor.cast<T>();
-
         // process prediction
-        // Eigen::Matrix<T, 2, Eigen::Dynamic> projectedJoints(
-        //     2, commonData.ava.model.numJoints());
-        // for (size_t i = 0; i < jointPos.cols(); ++i) {
-        //     Eigen::Matrix<T, 3, 1> pt = jointPos.col(i);
-        //     projectedJoints(0, i) = pt(0) * (T)commonData.intrin.fx / pt(2) + (T)commonData.intrin.cx;
-        //     projectedJoints(1, i) = pt(1) * (T)commonData.intrin.fy / pt(2) + (T)commonData.intrin.cy;
-        // }
+        Eigen::Matrix<T, 2, Eigen::Dynamic> projectedJoints(
+            2, commonData.ava.model.numJoints());
+        for (size_t i = 0; i < jointPosFinal.cols(); ++i) {
+            Eigen::Matrix<T, 3, 1> pt = jointPos.col(i);
+            projectedJoints(0, i) = pt(0) * (T)commonData.intrin.fx / pt(2) + (T)commonData.intrin.cx;
+            projectedJoints(1, i) = pt(1) * (T)commonData.intrin.fy / pt(2) + (T)commonData.intrin.cy;
+        }
 
         // // process gt
         
-        // Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints(
-        //     3, commonData.ava.model.numJoints());
-        // gtJoints.setZero();
-        // const auto& hand_right_raw = kps2dGT.at("right");
-        // Eigen::Matrix<double, 3, 21> hand_right_kps2d;
-        // hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3).transpose();
-        // hand_right_kps2d.row(0) =  hand_right_kps2d.row(0) * 1280;
-        // hand_right_kps2d.row(1) = hand_right_kps2d.row(1) * 720;
-        // const auto& hand_left_raw = kps2dGT.at("left");
-        // Eigen::Matrix<double, 3, 21> hand_left_kps2d;
-        // hand_left_kps2d = util::loadFloatMatrix(hand_left_raw, 21, 3).transpose();
-        // hand_left_kps2d.row(0) =  hand_left_kps2d.row(0) * 1280;
-        // hand_left_kps2d.row(1) = hand_left_kps2d.row(1) * 720;
+        Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints(
+            3, commonData.ava.model.numJoints());
+        gtJoints.setZero();
+        const auto& hand_right_raw = kps2dGT.at("right");
+        Eigen::Matrix<double, 3, 21> hand_right_kps2d;
+        hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3).transpose();
+        hand_right_kps2d.row(0) =  hand_right_kps2d.row(0) * 1280;
+        hand_right_kps2d.row(1) = hand_right_kps2d.row(1) * 720;
+        const auto& hand_left_raw = kps2dGT.at("left");
+        Eigen::Matrix<double, 3, 21> hand_left_kps2d;
+        hand_left_kps2d = util::loadFloatMatrix(hand_left_raw, 21, 3).transpose();
+        hand_left_kps2d.row(0) =  hand_left_kps2d.row(0) * 1280;
+        hand_left_kps2d.row(1) = hand_left_kps2d.row(1) * 720;
 
-        // gtJoints.col(18) = hand_left_kps2d.col(0);
-        // gtJoints.col(19) = hand_right_kps2d.col(0);
+        // only wrist for debug
+        gtJoints.col(18) = hand_left_kps2d.col(0);
+        gtJoints.col(19) = hand_right_kps2d.col(0);
 
-        // // for debug
         // gtJoints.array() += 100;
 
         // residual[0] =  ((projectedJoints - gtJoints.topRows(2)).cwiseAbs2().colwise().sum().cwiseSqrt().cwiseProduct(gtJoints.row(2))).sum();

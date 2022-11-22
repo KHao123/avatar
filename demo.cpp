@@ -138,11 +138,10 @@ int main(int argc, char** argv) {
     // ark::RTree rtree(rtreePath);
 
     ark::AvatarModel avaModel;
-    // std::cout<<"#####2\n";
     ark::Avatar ava(avaModel);
-    // std::cout<<"#####3\n";
     ark::AvatarOptimizer avaOpt(ava, intrin, background.size());
-    // std::cout<<"#####4\n";
+    // std::cout << background.size() << std::endl; // 1280 * 720
+    // getchar();
     // std::cout << ava.model.numJoints() << std::endl;
     // std::cout << ava.model.numPoints() << std::endl;
     // std::cout << ava.model.parent << std::endl;

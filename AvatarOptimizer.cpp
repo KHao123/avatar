@@ -726,34 +726,36 @@ struct Kps2dAutoDiffCostFunctor {
     }
     template <class T>
     bool operator()(T const *const *params, T *residual) const {
-
-        Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(
+        Eigen::Matrix<T, 3, Eigen::Dynamic> shapedCloud(
             3, commonData.ava.model.numPoints());
-        Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> cloudVec(
-            cloud.data(), cloud.rows() * cloud.cols());
+        Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> shapedCloudVec(
+            shapedCloud.data(), shapedCloud.rows() * shapedCloud.cols());
 
-        if (commonData.shapeEnabled) {
+        /** Apply shape keys */
+        if (false) {
             Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
                 params[commonData.ava.model.numJoints() + 1],
                 commonData.ava.model.numShapeKeys(), 1);
-            cloudVec.noalias() =
+            shapedCloudVec.noalias() =
                 commonData.ava.model.keyClouds.cast<T>() * wMap +
                 commonData.ava.model.baseCloud;
         } else {
-            cloudVec.noalias() = commonData.ava.model.keyClouds.cast<T>() *
+            shapedCloudVec.noalias() = commonData.ava.model.keyClouds.cast<T>() *
                                      commonData.ava.w.cast<T>() +
                                  commonData.ava.model.baseCloud;
         }
+        // _ARK_PROFILE(SHAPE);
 
+        /** Apply joint [shape] regressor */
         Eigen::Matrix<T, 3, Eigen::Dynamic> jointPos =
-            cloud * commonData.ava.model.jointRegressor.cast<T>();
+            shapedCloud * commonData.ava.model.jointRegressor.cast<T>();
 
-        if (commonData.ava.model.useJointShapeRegressor) {
+        if (false) {
             jointPos.resize(3, commonData.ava.model.numJoints());
             Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> jointPosVec(
                 jointPos.data(), 3 * commonData.ava.model.numJoints());
 
-            if (commonData.shapeEnabled) {
+            if (false) {
                 Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
                     params[commonData.ava.model.numJoints() + 1],
                     commonData.ava.model.numShapeKeys(), 1);
@@ -767,37 +769,113 @@ struct Kps2dAutoDiffCostFunctor {
                         commonData.ava.w.cast<T>();
             }
         } else {
-            jointPos.noalias() =
-                cloud * commonData.ava.model.jointRegressor.cast<T>();
+            // jointPos.noalias() =
+            //     cloud * commonData.ava.model.jointRegressor.cast<T>();
         }
 
+        /** END of shape update, BEGIN pose update */
         
+        /** Compute each joint's transform */
+        // Eigen::Matrix<T, 12, Eigen::Dynamic> jointTrans(12, commonData.ava.model.numJoints());
+        // using VecMap3 = Eigen::Map<const Eigen::Matrix<T, 3, 1>>;
+        // using VecMap33 = Eigen::Map<const Eigen::Matrix<T, 3, 3>>;
+        // using TransformMap = Eigen::Map<const Eigen::Matrix<T, 3, 4>>;
+        // /** Root joint joints */
+        // TransformMap jt0(jointTrans);
+        // VecMap33 a(params[1], 3, 3);
+        // jt0.leftCols(3).noalias() = a; // 梯度是否回传
+        // VecMap3 b(params[0], 3, 1);
+        // jt0.rightCols(1) = b;  // Root position at center (non-standard!)
+        // for (size_t i = 1; i < commonData.ava.model.numJoints(); ++i) {
+        //     TransformMap jti(jointTrans.col(i));
+        //     VecMap33 c(params[i+1], 3, 3);
+        //     jti.leftCols(3).noalias() = c;
+        //     jti.rightCols(1).noalias() =
+        //         jointPos.col(i) - jointPos.col(commonData.ava.model.parent[i]);
+        //     util::mulAffine<T, Eigen::ColMajor>(
+        //         TransformMap(jointTrans.col(commonData.ava.model.parent[i])), jti);
+        // }
+
+        // for (int i = 0; i < commonData.ava.model.numJoints(); ++i) {
+        //     TransformMap jti(jointTrans.col(i));
+        //     Eigen::Matrix<T, 3, Eigen::Dynamic> jPosInit = jointPos.col(i);
+        //     jointPos.col(i).noalias() = jti.rightCols(1);
+        //     jti.rightCols(1).noalias() -= jti.leftCols(3) * jPosInit;
+        // }
+
+        // /** Compute each point's transform */
+        // Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(
+        //     3, commonData.ava.model.numPoints());
+
+        // Eigen::Matrix<T, 12, Eigen::Dynamic> pointTrans = jointTrans * commonData.ava.model.weights.cast<T>();
+        // for (size_t i = 0; i < commonData.ava.model.numPoints(); ++i) {
+        //     TransformMap pti(pointTrans.col(i));
+        //     cloud.col(i).noalias() = pti * shapedCloud.col(i).homogeneous();
+        // }
+
+        // Eigen::Matrix<T, 3, Eigen::Dynamic> finaljointPos =
+        //     cloud * commonData.ava.model.jointRegressor.cast<T>();
+
+
+        // std::cout << "jointPos\n";
+        // for(int i=0;i<jointPos.cols();i++){
+        //     std::cout << jointPos.col(i).transpose() << "###"<<std::endl;
+        // }
+        
+        // std::cout << "intrin: " << commonData.intrin.fx << ", " << commonData.intrin.fy<< std::endl;
+        // std::cout << "intrin: " << commonData.intrin.cx << ", " << commonData.intrin.cy<< std::endl;
         // process prediction
-        Eigen::Matrix<T, 3, Eigen::Dynamic> projectedJoints(
-            3, commonData.ava.model.numJoints());
+        Eigen::Matrix<T, 2, Eigen::Dynamic> projectedJoints(
+            2, commonData.ava.model.numJoints());
         for (size_t i = 0; i < jointPos.cols(); ++i) {
             Eigen::Matrix<T, 3, 1> pt = jointPos.col(i);
             projectedJoints(0, i) = pt(0) * (T)commonData.intrin.fx / pt(2) + (T)commonData.intrin.cx;
             projectedJoints(1, i) = pt(1) * (T)commonData.intrin.fy / pt(2) + (T)commonData.intrin.cy;
         }
 
+        // std::cout << "projectedJoints\n";
+        // for(int i=0;i<projectedJoints.cols();i++){
+        //     std::cout << projectedJoints.col(i).transpose() << "###" << std::endl;
+        // }
 
         // process gt
+        
         Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints(
             3, commonData.ava.model.numJoints());
+        gtJoints.setZero();
         const auto& hand_right_raw = kps2dGT.at("right");
-        Eigen::SparseMatrix<double> hand_right_kps2d;
-        hand_right_kps2d.resize(21, 3);
-        hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3).sparseView();
+        Eigen::Matrix<double, 3, 21> hand_right_kps2d;
+        hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3).transpose();
+        hand_right_kps2d.row(0) =  hand_right_kps2d.row(0) * 1280;
+        hand_right_kps2d.row(1) = hand_right_kps2d.row(1) * 720;
         const auto& hand_left_raw = kps2dGT.at("left");
-        Eigen::SparseMatrix<double> hand_left_kps2d;
-        hand_left_kps2d.resize(21, 3);
-        hand_left_kps2d = util::loadFloatMatrix(hand_left_raw, 21, 3).sparseView();
+        Eigen::Matrix<double, 3, 21> hand_left_kps2d;
+        hand_left_kps2d = util::loadFloatMatrix(hand_left_raw, 21, 3).transpose();
+        hand_left_kps2d.row(0) =  hand_left_kps2d.row(0) * 1280;
+        hand_left_kps2d.row(1) = hand_left_kps2d.row(1) * 720;
+
         gtJoints.col(18) = hand_left_kps2d.col(0);
         gtJoints.col(19) = hand_right_kps2d.col(0);
 
-        residual[0] =  ((projectedJoints - gtJoints.topRows(2)).cwiseAbs2().colwise().sum() * gtJoints.row(2)).sum();
-
+        // for debug
+        gtJoints.array() += 100;
+        
+        // gtJoints = gtJoints.cast<T>();
+        // std::cout << "left hand: \n"<<hand_left_kps2d << "###"<< std::endl;
+        // std::cout << "right hand: \n"<<hand_right_kps2d << "###"<< std::endl;
+        // std::cout << "ground true\n";
+        // std::cout << gtJoints << std::endl;
+        
+        // for(int i=0;i<gtJoints.cols();i++){
+        //     std::cout << gtJoints.col(i).transpose() << "###"<< std::endl;
+        // }
+        // std::cout << "left hand: \n"<<projectedJoints.col(18) << "###"<< std::endl;
+        // std::cout << "right hand: \n"<<projectedJoints.col(19) << "###"<< std::endl;
+        // std::cout << "confident: \n" << gtJoints.row(2) <<std::endl;
+        // std::cout <<"result:\n" << (projectedJoints - gtJoints.topRows(2)).cwiseAbs2().colwise().sum().cwiseProduct(gtJoints.row(2)) << std::endl;
+        residual[0] =  ((projectedJoints - gtJoints.topRows(2)).cwiseAbs2().colwise().sum().cwiseSqrt().cwiseProduct(gtJoints.row(2))).sum();
+        // std::cout << residual[0] << std::endl;
+        // getchar();
         return true;
     }
     AvatarEvaluationCommonData &commonData;
@@ -1331,8 +1409,9 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         Eigen::AngleAxisd aa;
         aa.fromRotationMatrix(ava.r[i]);
         r[i] = aa;
+        // std::cout << "rrrrr\n" << r[i]；
     }
-
+    
     AvatarEvaluationCommonData common(*this, intrin, true);
     common.numThreads = num_threads;  // boost::thread::hardware_concurrency();;
     // std::vector<std::vector<int>> correspondences;
@@ -1557,13 +1636,13 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         if (common.shapeEnabled) {
             kps2d_cost_function->AddParameterBlock(ava.model.numShapeKeys());
         }
-        kps2d_cost_function->SetNumResiduals(3);
+        kps2d_cost_function->SetNumResiduals(1);
 
 
         std::vector<double *> fullParams;
         fullParams.push_back(ava.p.data());
         for (int i = 0; i < ava.model.numJoints(); ++i) {
-            fullParams.push_back(r[i].coeffs().data());
+            fullParams.push_back(ava.r[i].data()); // ava.r 和 r不是一个格式
         }
 
         if (common.shapeEnabled) {
@@ -1577,8 +1656,8 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
          * residuals. Otherwise the function terms become extremely imbalanced
          * in some cases.
          */
-        common.scaledBetaPose = betaPose * std::sqrt(totalResiduals) / 15.;
-        common.scaledBetaShape = betaShape * std::sqrt(totalResiduals) / 15.;
+        // common.scaledBetaPose = betaPose * std::sqrt(totalResiduals) / 15.;
+        common.scaledBetaShape = betaShape * 1 / 15.;
 
         // std::vector<double *> posePriorParams;
         // posePriorParams.reserve(ava.model.numJoints() - 1);
@@ -1611,12 +1690,16 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         PROFILE(>> Solve);
 
         // output (for debugging)
-        // std::cout << summary.FullReport() << "\n";
+        std::cout << summary.FullReport() << "\n";
+        // std::cout << summary.BriefReport() << "\n";
+        // std::cout << "x : " << initial_x
+        //             << " -> " << x << "\n";
+        getchar();
 
         // Convert from quaternion
-        for (int i = 0; i < ava.model.numJoints(); ++i) {
-            ava.r[i].noalias() = r[i].toRotationMatrix();
-        }
+        // for (int i = 0; i < ava.model.numJoints(); ++i) {
+        //     ava.r[i].noalias() = r[i].toRotationMatrix();
+        // }
         ava.update();
         PROFILE(>> Finish);
         // std::cout << ava.w.transpose() << "\n";

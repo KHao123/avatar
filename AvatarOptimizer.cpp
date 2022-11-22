@@ -725,7 +725,7 @@ struct Kps2dAutoDiffCostFunctor {
         // pointId = commonData.caches[cacheId].pointId;
     }
     template <class T>
-    bool operator()(T const *const *params, T *residual) const {
+    bool operator()(const T* const params, T *residual) const {
         Eigen::Matrix<T, 3, Eigen::Dynamic> shapedCloud(
             3, commonData.ava.model.numPoints());
         Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> shapedCloudVec(
@@ -734,7 +734,7 @@ struct Kps2dAutoDiffCostFunctor {
         /** Apply shape keys */
         if (false) {
             Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
-                params[commonData.ava.model.numJoints() + 1],
+                &params[commonData.ava.model.numJoints() + 1],
                 commonData.ava.model.numShapeKeys(), 1);
             shapedCloudVec.noalias() =
                 commonData.ava.model.keyClouds.cast<T>() * wMap +
@@ -757,7 +757,7 @@ struct Kps2dAutoDiffCostFunctor {
 
             if (false) {
                 Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
-                    params[commonData.ava.model.numJoints() + 1],
+                    &params[commonData.ava.model.numJoints() + 1],
                     commonData.ava.model.numShapeKeys(), 1);
                 jointPosVec.noalias() =
                     commonData.ava.model.jointShapeRegBase.cast<T>() +
@@ -817,9 +817,9 @@ struct Kps2dAutoDiffCostFunctor {
         //     cloud * commonData.ava.model.jointRegressor.cast<T>();
 
 
-        // std::cout << "jointPos\n";
-        // for(int i=0;i<jointPos.cols();i++){
-        //     std::cout << jointPos.col(i).transpose() << "###"<<std::endl;
+        // std::cout << "finaljointPos\n";
+        // for(int i=0;i<finaljointPos.cols();i++){
+        //     std::cout << finaljointPos.col(i).transpose() << "###"<<std::endl;
         // }
         
         // std::cout << "intrin: " << commonData.intrin.fx << ", " << commonData.intrin.fy<< std::endl;
@@ -1607,8 +1607,8 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         //     params.push_back(r[k].coeffs().data());
         // }
         // //END DEBUG
-        int cid = 0;
-        size_t totalResiduals = 0;
+        // int cid = 0;
+        // size_t totalResiduals = 0;
         // for (int i = 0; i < ava.model.numPoints(); ++i) {
         //     if (correspondences[i].empty()) continue;
         //     totalResiduals += correspondences[i].size();
@@ -1621,28 +1621,26 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         // }
 
         
-        // const int fullParamsNum = 227;
-        // ceres::CostFunction* kps2d_cost_function = new AutoDiffCostFunction<Kps2dAutoDiffCostFunctor, 1, fullParamsNum>(
-        //                                         new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
+        ceres::CostFunction* kps2d_cost_function = new AutoDiffCostFunction<Kps2dAutoDiffCostFunctor, 1, 227>(
+                                                new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
+        // DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor> *kps2d_cost_function =
+        //     new DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor>(
+        //         new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
 
-        DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor> *kps2d_cost_function =
-            new DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor>(
-                new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
-
-        kps2d_cost_function->AddParameterBlock(3);
-        for (int k = 0; k < ava.model.numJoints(); ++k) {
-            kps2d_cost_function->AddParameterBlock(4);
-        }
-        if (common.shapeEnabled) {
-            kps2d_cost_function->AddParameterBlock(ava.model.numShapeKeys());
-        }
-        kps2d_cost_function->SetNumResiduals(1);
+        // kps2d_cost_function->AddParameterBlock(3);
+        // for (int k = 0; k < ava.model.numJoints(); ++k) {
+        //     kps2d_cost_function->AddParameterBlock(4);
+        // }
+        // if (common.shapeEnabled) {
+        //     kps2d_cost_function->AddParameterBlock(ava.model.numShapeKeys());
+        // }
+        // kps2d_cost_function->SetNumResiduals(1);
 
 
         std::vector<double *> fullParams;
         fullParams.push_back(ava.p.data());
         for (int i = 0; i < ava.model.numJoints(); ++i) {
-            fullParams.push_back(ava.r[i].data()); // ava.r 和 r不是一个格式
+            fullParams.push_back(r[i].coeffs().data()); // ava.r 和 r不是一个格式
         }
 
         if (common.shapeEnabled) {
@@ -1668,12 +1666,12 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         //     problem.AddResidualBlock(new AvatarPosePriorCostFunctor(common),
         //                              NULL, posePriorParams);
         // }
-        if (betaShape > 0.) {
-            problem.AddResidualBlock(
-                new AvatarShapePriorCostFunctor(ava.model.numShapeKeys(),
-                                                common.scaledBetaShape),
-                NULL, ava.w.data());
-        }
+        // if (betaShape > 0.) {
+        //     problem.AddResidualBlock(
+        //         new AvatarShapePriorCostFunctor(ava.model.numShapeKeys(),
+        //                                         common.scaledBetaShape),
+        //         NULL, ava.w.data());
+        // }
         PROFILE(>> Construct problem : residual blocks);
 
 #ifdef PCL_DEBUG_VISUALIZE
@@ -1697,9 +1695,9 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         getchar();
 
         // Convert from quaternion
-        // for (int i = 0; i < ava.model.numJoints(); ++i) {
-        //     ava.r[i].noalias() = r[i].toRotationMatrix();
-        // }
+        for (int i = 0; i < ava.model.numJoints(); ++i) {
+            ava.r[i].noalias() = r[i].toRotationMatrix();
+        }
         ava.update();
         PROFILE(>> Finish);
         // std::cout << ava.w.transpose() << "\n";

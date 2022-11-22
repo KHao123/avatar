@@ -729,30 +729,29 @@ struct Kps2dAutoDiffCostFunctor {
         // Eigen::Matrix<T, 3, Eigen::Dynamic> shapedCloud(3, commonData.ava.model.numPoints());
         Eigen::Matrix<T, Eigen::Dynamic, 1> shapedCloudVec(3 * commonData.ava.model.numPoints());
 
-        // init baseCloud
-        Eigen::Matrix<double, Eigen::Dynamic, 1> baseCloud(
-            3 * commonData.ava.model.numPoints());
-        baseCloud = commonData.ava.model.baseCloud;
+        // // init baseCloud
+        // Eigen::Matrix<double, Eigen::Dynamic, 1> baseCloud(
+        //     3 * commonData.ava.model.numPoints());
+        // baseCloud = commonData.ava.model.baseCloud;
 
-        // init keyClouds
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> keyClouds(
-            3 * commonData.ava.model.numPoints(), commonData.ava.model.numShapeKeys());
-        keyClouds = commonData.ava.model.keyClouds;
+        // // init keyClouds
+        // Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> keyClouds(
+        //     3 * commonData.ava.model.numPoints(), commonData.ava.model.numShapeKeys());
+        // keyClouds = commonData.ava.model.keyClouds;
 
         Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>> wMap(
                 params[commonData.ava.model.numJoints() + 1],
                 commonData.ava.model.numShapeKeys(), 1);
 
-        shapedCloudVec = keyClouds * wMap + baseCloud;
-
-        // init joint regressor
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> jointRegressor(
-            commonData.ava.model.numPoints(), commonData.ava.model.numJoints());
-        jointRegressor = commonData.ava.model.jointRegressor;
+        // shapedCloudVec = keyClouds * wMap + baseCloud;
+        shapedCloudVec = commonData.ava.model.keyClouds * wMap + commonData.ava.model.baseCloud;
 
         Eigen::Matrix<T, 3, Eigen::Dynamic> jointPos(3, commonData.ava.model.numJoints());
         Eigen::Map<Eigen::Matrix<T, 3, Eigen::Dynamic>> shapedCloud(shapedCloudVec.data(), 3, commonData.ava.model.numPoints());
-        jointPos = shapedCloud * jointRegressor.cast<T>(); // very slow
+
+        // BEGIN_PROFILE;
+        jointPos = shapedCloud * commonData.ava.model.jointRegressor; // very slow
+        // PROFILE(>> jointRegressor);
 
         Eigen::Matrix<T, 12, Eigen::Dynamic> jointTrans(12, commonData.ava.model.numJoints());
         using TransformMap = Eigen::Map<Eigen::Matrix<T, 3, 4>>;
@@ -785,17 +784,19 @@ struct Kps2dAutoDiffCostFunctor {
         
         Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(3, commonData.ava.model.numPoints());
         // init weight
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> weights(
-            commonData.ava.model.numJoints(), commonData.ava.model.numPoints());
-        weights = commonData.ava.model.weights;
-        Eigen::Matrix<T, 12, Eigen::Dynamic> pointTrans = jointTrans * weights.cast<T>();
+        // Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> weights(
+        //     commonData.ava.model.numJoints(), commonData.ava.model.numPoints());
+        // weights = commonData.ava.model.weights;
+        // Eigen::Matrix<T, 12, Eigen::Dynamic> pointTrans = jointTrans * weights.cast<T>();
+        Eigen::Matrix<T, 12, Eigen::Dynamic> pointTrans = jointTrans * commonData.ava.model.weights;
         for (size_t i = 0; i < commonData.ava.model.numPoints(); ++i) {
             TransformMap pti(pointTrans.col(i).data());
             cloud.col(i) = pti * shapedCloud.col(i).homogeneous();
         }
 
         Eigen::Matrix<T, 3, Eigen::Dynamic> jointPosFinal(3, commonData.ava.model.numJoints());
-        jointPosFinal = cloud * jointRegressor.cast<T>(); // very slow
+        // jointPosFinal = cloud * jointRegressor.cast<T>(); // very slow
+        jointPosFinal = cloud * commonData.ava.model.jointRegressor;
         
         // std::cout<<"rmap:\n"<<rMap.col(0)<<std::endl;
         Eigen::Matrix<double, 3, Eigen::Dynamic> debug_gt(

@@ -765,7 +765,7 @@ struct Kps2dAutoDiffCostFunctor {
 
         TransformMap jt0(jointTrans.data());
         jt0.leftCols(3) = ConstQuatMap(params[0 + 1]).toRotationMatrix();
-        jt0.rightCols(1) = ConstVecMap(rootPos(params[0]));
+        // jt0.rightCols(1) = ConstVecMap(rootPos(params[0]));
         
         // jt0.rightCols<1>() = pMap;  // Root position at center (non-standard!)
         // for (size_t i = 1; i < model.numJoints(); ++i) {

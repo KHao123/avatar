@@ -220,9 +220,49 @@ int main(int argc, char** argv) {
             break;
         }
         
-        // std::string kps2d_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/annotation_" + ss_img_id.str() + ".npz";
-        std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_0158.npz";
-        cnpy::npz_t hand_npz = cnpy::npz_load(kps2d_npzPath);
+        std::string kps2d_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/annotation_" + ss_img_id.str() + ".npz";
+        // std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_0158.npz";
+        cnpy::npz_t kps2d_npz = cnpy::npz_load(kps2d_npzPath);
+        Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints(
+            3, ava.model.numJoints());
+        gtJoints.setZero();
+        // const auto& hand_right_raw = kps2dGT.at("right");
+        // Eigen::Matrix<double, 3, 21> hand_right_kps2d;
+        // hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3).transpose();
+        // hand_right_kps2d.row(0) =  hand_right_kps2d.row(0) * 1280;
+        // hand_right_kps2d.row(1) = hand_right_kps2d.row(1) * 720;
+        // const auto& hand_left_raw = kps2dGT.at("left");
+        // Eigen::Matrix<double, 3, 21> hand_left_kps2d;
+        // hand_left_kps2d = util::loadFloatMatrix(hand_left_raw, 21, 3).transpose();
+        // hand_left_kps2d.row(0) =  hand_left_kps2d.row(0) * 1280;
+        // hand_left_kps2d.row(1) = hand_left_kps2d.row(1) * 720;
+        // int ind_right[16] = {21,49,50,51,37,38,39,40,41,42,46,47,48,43,44,45};
+        // int ind_left[16] = {20,34,35,36,22,23,24,25,25,26,31,32,33,28,29,30};
+        // int ind_hand_mp[16] = {0,1,2,3,5,6,7,9,10,11,13,14,15,17,18,19};
+        // for(int i = 0; i<16; i++){
+        //     gtJoints.col(ind_right[i]) = hand_left_kps2d.col(ind_hand_mp[i]);
+        //     gtJoints.col(ind_left[i]) = hand_right_kps2d.col(ind_hand_mp[i]);
+        // }
+        getchar();
+        const auto& mask_raw = kps2d_npz.at("mask");
+        Eigen::Matrix<double, 127, 1> mask;
+        mask = ark::util::loadFloatMatrix(mask_raw, 127, 1);
+        
+        const auto& keypoints_raw = kps2d_npz.at("keypoints");
+        Eigen::Matrix<double, 3, 127> keypoints;
+        keypoints = ark::util::loadFloatMatrix(keypoints_raw, 127, 3).transpose();
+        keypoints.row(0) =  keypoints.row(0) * 2048;
+        keypoints.row(1) = keypoints.row(1) * 1536;
+        int j = 0;
+        for(int i = 0; i < 55; ++i){
+            // remove head to adapt smplh
+            if( i == 22 || i == 23 || i == 24){
+                continue;
+            }
+            gtJoints.col(j) = keypoints.col(i);
+            j++;
+        }
+        std::cout<<"gt:\n"<<gtJoints<<std::endl;
 
         std::string smplx_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/smplx_" + ss_img_id.str() + ".npz";
         cnpy::npz_t smplx_npz = cnpy::npz_load(smplx_npzPath);
@@ -336,7 +376,7 @@ int main(int argc, char** argv) {
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);
                     }
-                    avaOpt.optimize(hand_npz, icpIters,
+                    avaOpt.optimize(gtJoints, icpIters,
                                     std::thread::hardware_concurrency());
                     PROFILE(Optimize(Total));
                     printf(

@@ -15,7 +15,7 @@ namespace ark {
         AvatarOptimizer(Avatar& ava, const CameraIntrin& intrin, const cv::Size& image_size);
 
         /** Begin full optimization on the target data cloud */
-        void optimize(cnpy::npz_t kps2d, 
+        void optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints, 
                 int icp_iters = 1, int num_threads = 4);
 
         /** Rotation representation size */

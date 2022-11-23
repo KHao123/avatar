@@ -220,31 +220,14 @@ int main(int argc, char** argv) {
             break;
         }
         
+        // process mediepipe ground true
         std::string kps2d_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/annotation_" + ss_img_id.str() + ".npz";
-        // std::string kps2d_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/annotation_0040.npz";
         // std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_0158.npz";
         cnpy::npz_t kps2d_npz = cnpy::npz_load(kps2d_npzPath);
         std::cout << kps2d_npzPath << std::endl;
         Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints(
             3, ava.model.numJoints());
         gtJoints.setZero();
-        // const auto& hand_right_raw = kps2d_npz.at("right");
-        // Eigen::Matrix<double, 3, 21> hand_right_kps2d;
-        // hand_right_kps2d = ark::util::loadFloatMatrix(hand_right_raw, 21, 3).transpose();
-        // hand_right_kps2d.row(0) =  hand_right_kps2d.row(0) * 1280;
-        // hand_right_kps2d.row(1) = hand_right_kps2d.row(1) * 720;
-        // const auto& hand_left_raw = kps2dGT.at("left");
-        // Eigen::Matrix<double, 3, 21> hand_left_kps2d;
-        // hand_left_kps2d = util::loadFloatMatrix(hand_left_raw, 21, 3).transpose();
-        // hand_left_kps2d.row(0) =  hand_left_kps2d.row(0) * 1280;
-        // hand_left_kps2d.row(1) = hand_left_kps2d.row(1) * 720;
-        // int ind_right[16] = {21,49,50,51,37,38,39,40,41,42,46,47,48,43,44,45};
-        // int ind_left[16] = {20,34,35,36,22,23,24,25,25,26,31,32,33,28,29,30};
-        // int ind_hand_mp[16] = {0,1,2,3,5,6,7,9,10,11,13,14,15,17,18,19};
-        // for(int i = 0; i<16; i++){
-        //     gtJoints.col(ind_right[i]) = hand_left_kps2d.col(ind_hand_mp[i]);
-        //     gtJoints.col(ind_left[i]) = hand_right_kps2d.col(ind_hand_mp[i]);
-        // }
        
         const auto& mask_raw = kps2d_npz.at("mask");
         Eigen::Matrix<double, 127, 1> mask;
@@ -264,7 +247,18 @@ int main(int argc, char** argv) {
             gtJoints.col(j) = keypoints.col(i);
             j++;
         }
+
+        // select point with high confidence
+        gtJoints.row(2) = (gtJoints.row(2).array() > 0.3 ).select(gtJoints.row(2), 0);
+        // delete special joints
+        int ignored_joints[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
+        for(int i=0;i<sizeof(ignored_joints)/sizeof(ignored_joints[0]);i++){
+            gtJoints(2,ignored_joints[i]) = 0;
+        }
+
+
         // std::cout<<"gt:\n"<<gtJoints.transpose()<<std::endl;
+        // getchar();
         std::string smplx_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/smplx_" + ss_img_id.str() + ".npz";
         cnpy::npz_t smplx_npz = cnpy::npz_load(smplx_npzPath);
         const auto& fullpose_raw = smplx_npz.at("fullpose");
@@ -372,7 +366,7 @@ int main(int argc, char** argv) {
                         // ava.r[0] =
                         //     Eigen::AngleAxisd(M_PI, Eigen::Vector3d(0, 1, 0))
                         //         .toRotationMatrix();
-                        // reinit = false;
+                        reinit = false;
                         ava.update();
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);

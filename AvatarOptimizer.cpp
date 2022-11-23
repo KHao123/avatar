@@ -719,9 +719,10 @@ struct AvatarShapePriorCostFunctor : ceres::CostFunction {
 
 struct Kps2dAutoDiffCostFunctor {
     Kps2dAutoDiffCostFunctor(
-        AvatarEvaluationCommonData &common_data, Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints)
+        AvatarEvaluationCommonData &common_data, Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints, Eigen::Matrix<double, 3, 4> projMatrix)
         : commonData(common_data),
-          gtJoints(gtJoints) {
+          gtJoints(gtJoints),
+          projMatrix(projMatrix) {
         // pointId = commonData.caches[cacheId].pointId;
     }
     template <class T>
@@ -799,22 +800,31 @@ struct Kps2dAutoDiffCostFunctor {
         jointPosFinal.noalias() = cloud * commonData.ava.model.jointRegressor;
         
         // process prediction
+        // Eigen::Matrix<T, 2, Eigen::Dynamic> projectedJoints(
+        //     2, commonData.ava.model.numJoints());
+        // for (size_t i = 0; i < jointPosFinal.cols(); ++i) {
+        //     Eigen::Matrix<T, 3, 1> pt = jointPosFinal.col(i);
+        //     projectedJoints(0, i) = pt(0) * (T)commonData.intrin.fx / pt(2) + (T)commonData.intrin.cx;
+        //     projectedJoints(1, i) = pt(1) * (T)commonData.intrin.fy / pt(2) + (T)commonData.intrin.cy;
+        // }
         Eigen::Matrix<T, 2, Eigen::Dynamic> projectedJoints(
             2, commonData.ava.model.numJoints());
         for (size_t i = 0; i < jointPosFinal.cols(); ++i) {
-            Eigen::Matrix<T, 3, 1> pt = jointPosFinal.col(i);
-            projectedJoints(0, i) = pt(0) * (T)commonData.intrin.fx / pt(2) + (T)commonData.intrin.cx;
-            projectedJoints(1, i) = pt(1) * (T)commonData.intrin.fy / pt(2) + (T)commonData.intrin.cy;
+            Eigen::Matrix<T, 4, 1>  pt(4,1);
+            pt.topRows(3) = jointPosFinal.col(i);
+            pt(3,0) += 1;
+            Eigen::Matrix<T, 3, 1> pt2 = projMatrix * pt;
+            projectedJoints(0, i) = pt2(0,0) / pt2(2,0);
+            projectedJoints(1, i) = pt2(1,0) / pt2(2,0);
         }
         
-        
-
         residual[0] =  ((projectedJoints - gtJoints.topRows(2)).cwiseAbs2().colwise().sum().cwiseSqrt().cwiseProduct(gtJoints.row(2))).sum();
 
         return true;
     }
     AvatarEvaluationCommonData &commonData;
     Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints;
+    Eigen::Matrix<double, 3, 4> projMatrix;
 };
 
 // #ifdef TEST_COMPARE_AUTO_DIFF
@@ -1564,7 +1574,7 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
 
         DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor> *kps2d_cost_function =
             new DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor>(
-                new Kps2dAutoDiffCostFunctor(common, gtJoints));
+                new Kps2dAutoDiffCostFunctor(common, gtJoints, renderer.projMatrix));
 
         // kps2d_cost_function->AddParameterBlock(3);
         // for (int k = 0; k < ava.model.numJoints(); ++k) {
@@ -1592,7 +1602,7 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
         }
         kps2d_cost_function->SetNumResiduals(1);
 
-        // problem.AddResidualBlock(kps2d_cost_function, NULL, fullParams);
+        problem.AddResidualBlock(kps2d_cost_function, NULL, fullParams);
 
         /** Scale the function weights according to number of ICP type
          * residuals. Otherwise the function terms become extremely imbalanced

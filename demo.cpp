@@ -221,14 +221,16 @@ int main(int argc, char** argv) {
         }
         
         std::string kps2d_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/annotation_" + ss_img_id.str() + ".npz";
+        // std::string kps2d_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/annotation_0040.npz";
         // std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_0158.npz";
         cnpy::npz_t kps2d_npz = cnpy::npz_load(kps2d_npzPath);
+        std::cout << kps2d_npzPath << std::endl;
         Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints(
             3, ava.model.numJoints());
         gtJoints.setZero();
-        // const auto& hand_right_raw = kps2dGT.at("right");
+        // const auto& hand_right_raw = kps2d_npz.at("right");
         // Eigen::Matrix<double, 3, 21> hand_right_kps2d;
-        // hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3).transpose();
+        // hand_right_kps2d = ark::util::loadFloatMatrix(hand_right_raw, 21, 3).transpose();
         // hand_right_kps2d.row(0) =  hand_right_kps2d.row(0) * 1280;
         // hand_right_kps2d.row(1) = hand_right_kps2d.row(1) * 720;
         // const auto& hand_left_raw = kps2dGT.at("left");
@@ -243,7 +245,7 @@ int main(int argc, char** argv) {
         //     gtJoints.col(ind_right[i]) = hand_left_kps2d.col(ind_hand_mp[i]);
         //     gtJoints.col(ind_left[i]) = hand_right_kps2d.col(ind_hand_mp[i]);
         // }
-        getchar();
+       
         const auto& mask_raw = kps2d_npz.at("mask");
         Eigen::Matrix<double, 127, 1> mask;
         mask = ark::util::loadFloatMatrix(mask_raw, 127, 1);
@@ -262,8 +264,7 @@ int main(int argc, char** argv) {
             gtJoints.col(j) = keypoints.col(i);
             j++;
         }
-        std::cout<<"gt:\n"<<gtJoints<<std::endl;
-
+        // std::cout<<"gt:\n"<<gtJoints.transpose()<<std::endl;
         std::string smplx_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/smplx_" + ss_img_id.str() + ".npz";
         cnpy::npz_t smplx_npz = cnpy::npz_load(smplx_npzPath);
         const auto& fullpose_raw = smplx_npz.at("fullpose");

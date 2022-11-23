@@ -21,6 +21,7 @@
 #include "util_smplx.hpp"
 #include <cnpy.h>
 #include "UtilCnpy.h"
+#include <typeinfo>
 
 #define BEGIN_PROFILE auto start = std::chrono::high_resolution_clock::now()
 #define PROFILE(x)                                                    \
@@ -114,7 +115,7 @@ int main(int argc, char** argv) {
 
     using boost::filesystem::exists;
     using boost::filesystem::path;
-    std::string intrinPath = (path(datasetPath) / "intrin.txt").string();
+    std::string intrinPath = (path(datasetPath) / "intrin_ours.txt").string();
     ark::CameraIntrin intrin;
     if (intrinPath.size()) {
         intrin.readFile(intrinPath);
@@ -136,11 +137,17 @@ int main(int argc, char** argv) {
     }
 
     // ark::RTree rtree(rtreePath);
+    std::string inPathRGB =
+        (path("../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/rgb_0000.jpg"))
+            .string();
+    cv::Mat imageRGB = cv::imread(inPathRGB);
+
 
     ark::AvatarModel avaModel;
     ark::Avatar ava(avaModel);
-    ark::AvatarOptimizer avaOpt(ava, intrin, background.size());
-    // std::cout << background.size() << std::endl; // 1280 * 720
+    ark::AvatarOptimizer avaOpt(ava, intrin, imageRGB.size());
+    // ark::AvatarOptimizer avaOpt(ava, intrin, background.size());
+    // std::cout << imageRGB.size() << std::endl; // 1280 * 720
     // getchar();
     // std::cout << ava.model.numJoints() << std::endl;
     // std::cout << ava.model.numPoints() << std::endl;
@@ -168,9 +175,17 @@ int main(int argc, char** argv) {
     std::vector<std::array<int, 2>> compsBySize;
 
     // Previous centers of mass: required by RTree postprocessor
-    Eigen::Matrix<double, 2, Eigen::Dynamic> comPre;
+    // Eigen::Matrix<double, 2, Eigen::Dynamic> comPre;
 
     bool reinit = true;
+
+    // std::string initial_smplx_path = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/smplx.npz";
+    // cnpy::npz_t initial_smplx_npz = cnpy::npz_load(initial_smplx_path);
+
+    // const auto& fullpose_raw = initial_smplx_npz.at("fullpose");
+    // Eigen::Matrix<double, 100, 55, 3> all_hand_right_kps2d = ark::util::loadFloatMatrix(fullpose_raw, 100, 165);
+    // using SmplxposeMap  =  Eigen::Map<Eigen::Matrix<double, 55, 3>>;
+    
 
     while (true) {
         // body.update();
@@ -178,49 +193,57 @@ int main(int argc, char** argv) {
         std::stringstream ss_img_id;
         ss_img_id << std::setw(padSize) << std::setfill('0')
                   << std::to_string(imId);
-
-        std::string inPath = (path(datasetPath) / "depth_exr" /
-                              ("depth_" + ss_img_id.str() + ".exr"))
-                                 .string();
+        std::cout<<"######1\n";
+        // std::string inPath = (path(datasetPath) / "depth_exr" /
+        //                       ("depth_" + ss_img_id.str() + ".exr"))
+        //                          .string();
         //+DEBUG
-        std::cout << "\n> LOAD" << inPath << "\n";
+        // std::cout << "\n> LOAD" << inPath << "\n";
         //-DEBUG
 
-        cv::Mat image;
-        ark::util::readXYZ(inPath, image, intrin);
+        // cv::Mat image;
+        // ark::util::readXYZ(inPath, image, intrin);
+        // std::string inPathRGB =
+        //     (path(datasetPath) / "rgb" / ("rgb_" + ss_img_id.str() + ".jpg"))
+        //         .string();
         std::string inPathRGB =
-            (path(datasetPath) / "rgb" / ("rgb_" + ss_img_id.str() + ".jpg"))
+            (path("../data/SH_k4a_contact_stream_file_wbg_ljq_avatar")  / ("rgb_" + ss_img_id.str() + ".jpg"))
                 .string();
         cv::Mat imageRGB = cv::imread(inPathRGB);
-        if (image.empty() || imageRGB.empty()) {
+        // if (image.empty() || imageRGB.empty()) {
+        //     std::cerr << "WARNING: no more images found, exiting\n";
+        //     break;
+        // }
+        std::cout<<imageRGB.size()<<std::endl;
+        if (imageRGB.empty()) {
             std::cerr << "WARNING: no more images found, exiting\n";
             break;
         }
-        // std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_" + ss_img_id.str() + ".npz";
+        
+        // std::string kps2d_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/annotation_" + ss_img_id.str() + ".npz";
         std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_0158.npz";
-                            
         cnpy::npz_t hand_npz = cnpy::npz_load(kps2d_npzPath);
-        // const auto hand_right = hand_npz["right_hand"];
-        // std::cout<<hand_right.shape[0]<<std::endl;
-        // const auto& hand_right_raw = hand_npz.at("right");
-        // ark::util::assertShape(hand_right_raw, {1, 21, 3});
-        // Eigen::SparseMatrix<double> hand_right_kps2d;
-        // hand_right_kps2d.resize(21, 3);
-        // hand_right_kps2d = ark::util::loadFloatMatrix(hand_right_raw, 21, 3)
-        //                      .sparseView();
-        // hand_right_kps2d.makeCompressed();
-        // std::cout<<hand_right_kps2d<<std::endl;
-        // getchar();
 
-        cv::Mat depth;
-        cv::extractChannel(image, depth, 2);
+        std::string smplx_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/smplx_" + ss_img_id.str() + ".npz";
+        cnpy::npz_t smplx_npz = cnpy::npz_load(smplx_npzPath);
+        const auto& fullpose_raw = smplx_npz.at("fullpose");
+        Eigen::Matrix<double, 3, 55> fullpose = ark::util::loadFloatMatrix(fullpose_raw, 55, 3).transpose();
+        const auto& transl_raw = smplx_npz.at("transl");
+        Eigen::Matrix<double, 3, 1> transl = ark::util::loadFloatMatrix(transl_raw, 3, 1);
+        // cv::Mat depth;
+        // cv::extractChannel(image, depth, 2);
         auto ccstart = std::chrono::high_resolution_clock::now();
         BEGIN_PROFILE;
-        cv::Mat sub =
-            bgsub.run(image, &compsBySize);
+        // std::cout<<"######2\n";
+        // cv::Mat sub =
+        //     bgsub.run(imageRGB, &compsBySize);
+        // std::cout<<"######3\n";
+        // std::cout<<compsBySize.size()<<std::endl;
+        // cv::Mat sub =
+        //     bgsub.run(image, &compsBySize);
         PROFILE(BG Subtraction);
-
-        cv::Mat vis(sub.size(), CV_8UC3);
+        
+        cv::Mat vis(imageRGB.size(), CV_8UC3);
         // for (int r = bgsub.topLeft.y; r <= bgsub.botRight.y; ++r) {
         //     const auto* inptr = sub.ptr<uint8_t>(r);
         //     auto* dptr = depth.ptr<float>(r);
@@ -265,40 +288,49 @@ int main(int argc, char** argv) {
                 if (true) {
                     ark::CloudType dataCloud(3, cnz);
                     // Eigen::VectorXi dataPartLabels(cnz);
-                    size_t i = 0;
-                    for (int r = bgsub.topLeft.y; r <= bgsub.botRight.y;
-                         r += interval) {
-                        auto* ptr = image.ptr<cv::Vec3f>(r);
-                        // auto* partptr = result.ptr<uint8_t>(r);
-                        for (int c = bgsub.topLeft.x; c <= bgsub.botRight.x;
-                             c += interval) {
-                            // if (partptr[c] == 255) continue;
-                            // if (partptr[c] >= rtree.numParts) {
-                            //     std::cerr
-                            //         << "FATAL: RTree body part prediction "
-                            //         << (int)partptr[c]
-                            //         << " is invalid, since there are only "
-                            //         << rtree.numParts << " body parts\n";
-                            //     std::exit(1);
-                            // }
-                            dataCloud(0, i) = ptr[c][0];
-                            dataCloud(1, i) = -ptr[c][1];
-                            dataCloud(2, i) = ptr[c][2];
-                            // dataPartLabels(i) = partptr[c];
-                            ++i;
-                        }
-                    }
+                    // size_t i = 0;
+                    // for (int r = bgsub.topLeft.y; r <= bgsub.botRight.y;
+                    //      r += interval) {
+                    //     auto* ptr = image.ptr<cv::Vec3f>(r);
+                    //     // auto* partptr = result.ptr<uint8_t>(r);
+                    //     for (int c = bgsub.topLeft.x; c <= bgsub.botRight.x;
+                    //          c += interval) {
+                    //         // if (partptr[c] == 255) continue;
+                    //         // if (partptr[c] >= rtree.numParts) {
+                    //         //     std::cerr
+                    //         //         << "FATAL: RTree body part prediction "
+                    //         //         << (int)partptr[c]
+                    //         //         << " is invalid, since there are only "
+                    //         //         << rtree.numParts << " body parts\n";
+                    //         //     std::exit(1);
+                    //         // }
+                    //         dataCloud(0, i) = ptr[c][0];
+                    //         dataCloud(1, i) = -ptr[c][1];
+                    //         dataCloud(2, i) = ptr[c][2];
+                    //         // dataPartLabels(i) = partptr[c];
+                    //         ++i;
+                    //     }
+                    // }
                     int icpIters = frameICPIters;
                     if (reinit) {
-                        Eigen::Vector3d cloudCen = dataCloud.rowwise().mean();
-                        ava.p = cloudCen;
+                        // Eigen::Vector3d cloudCen = dataCloud.rowwise().mean();
+                        // ava.p = Eigen::Vector3d(0, 0, 1);
+                        ava.p = transl;
+                        // std::cout<<"tranl:\n"<<transl<<std::endl;
                         ava.w.setZero();
-                        for (int i = 0; i < ava.model.numJoints(); ++i) {
-                            ava.r[i].setIdentity();
+                        int j = 0;
+                        for(int i = 0; i < fullpose.cols(); ++i){
+                            // remove head to adapt smplh
+                            if( i == 22 || i == 23 || i == 24){
+                                continue;
+                            }
+                            ava.r[j] = Eigen::AngleAxisd(fullpose.col(i).norm(), fullpose.col(i).normalized()).toRotationMatrix();
+                            j++;
+
                         }
-                        ava.r[0] =
-                            Eigen::AngleAxisd(M_PI, Eigen::Vector3d(0, 1, 0))
-                                .toRotationMatrix();
+                        // ava.r[0] =
+                        //     Eigen::AngleAxisd(M_PI, Eigen::Vector3d(0, 1, 0))
+                        //         .toRotationMatrix();
                         // reinit = false;
                         ava.update();
                         icpIters = reinitICPIters;
@@ -312,9 +344,9 @@ int main(int argc, char** argv) {
                         std::chrono::duration<double, std::milli>(
                             std::chrono::high_resolution_clock::now() - ccstart)
                             .count());
-                    ark::AvatarRenderer rend(ava, intrin);
+                    ark::AvatarRenderer rend(ava, intrin, "../data/camera_param.json");
                     // Draw avatar onto RGB using lambertian shading
-                    cv::Mat modelMap = rend.renderLambert(depth.size());
+                    cv::Mat modelMap = rend.renderLambert(imageRGB.size());
                     for (int r = 0; r < vis.rows; ++r) {
                         auto* outptr = vis.ptr<cv::Vec3b>(r);
                         const auto* renderptr = modelMap.ptr<uint8_t>(r);
@@ -332,10 +364,10 @@ int main(int argc, char** argv) {
                             .count());
                 }
             }
-            for (int r = 0; r < image.rows; ++r) {
+            for (int r = 0; r < imageRGB.rows; ++r) {
                 auto* outptr = vis.ptr<cv::Vec3b>(r);
                 const auto* rgbptr = imageRGB.ptr<cv::Vec3b>(r);
-                for (int c = 0; c < image.cols; ++c) {
+                for (int c = 0; c < imageRGB.cols; ++c) {
                     if (outptr[c][0] == 0 && outptr[c][1] == 0 &&
                         outptr[c][2] == 0)
                         outptr[c] = rgbptr[c];
@@ -346,22 +378,22 @@ int main(int argc, char** argv) {
                 }
             }
         } else {
-            std::vector<int> colorid(256, 255);
-            for (int r = 0; r < compsBySize.size(); ++r) {
-                colorid[compsBySize[r][1]] = r;  // > 0 ? 255 : 0;
-            }
-            for (int r = 0; r < image.rows; ++r) {
-                auto* outptr = vis.ptr<cv::Vec3b>(r);
-                const auto* inptr = sub.ptr<uint8_t>(r);
-                for (int c = 0; c < image.cols; ++c) {
-                    int colorIdx = colorid[inptr[c]];
-                    if (colorIdx >= 254) {
-                        outptr[c] = 0;
-                    } else {
-                        outptr[c] = ark::util::paletteColor(colorIdx, true);
-                    }
-                }
-            }
+            // std::vector<int> colorid(256, 255);
+            // for (int r = 0; r < compsBySize.size(); ++r) {
+            //     colorid[compsBySize[r][1]] = r;  // > 0 ? 255 : 0;
+            // }
+            // for (int r = 0; r < imageRGB.rows; ++r) {
+            //     auto* outptr = vis.ptr<cv::Vec3b>(r);
+            //     const auto* inptr = sub.ptr<uint8_t>(r);
+            //     for (int c = 0; c < imageRGB.cols; ++c) {
+            //         int colorIdx = colorid[inptr[c]];
+            //         if (colorIdx >= 254) {
+            //             outptr[c] = 0;
+            //         } else {
+            //             outptr[c] = ark::util::paletteColor(colorIdx, true);
+            //         }
+            //     }
+            // }
         }
         // cv::rectangle(vis, bgsub.topLeft, bgsub.botRight,
         // cv::Scalar(0,0,255));

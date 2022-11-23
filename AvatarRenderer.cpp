@@ -1,22 +1,72 @@
 #include "AvatarRenderer.h"
 
 #include <iostream>
-#include "internal/AvatarHelpers.h"
+#include <fstream>
 
+#include "internal/AvatarHelpers.h"
+// #include <json/json.h>
 namespace ark {
 
-AvatarRenderer::AvatarRenderer(const Avatar& ava, const CameraIntrin& intrin)
-    : ava(ava), intrin(intrin) {}
+AvatarRenderer::AvatarRenderer(const Avatar& ava, const CameraIntrin& intrin, std::string cameraPath)
+    : ava(ava), intrin(intrin) {
+        // Json::Reader reader;
+        // Json::Value camera_param;
+        // std::ifstream file_in(cameraPath, std::ios::binary);
+
+        // reader.parse(file_in, camera_param);
+        // Eigen::Matrix<double, 4, 4> extrinsic(4,4);
+        // for(int i=0; i < 3;i++){
+        //     for(int j=0;j<3;j++){
+        //         extrinsic(i,j) = camera_param["extrinsic_r"][i][j].asDouble();
+        //     }
+        // }
+        // for(int j=0;j<3;j++){
+        //     extrinsic(j,3) = camera_param["extrinsic_t"][j].asDouble();
+        // }
+        // extrinsic(3,3) = 1.0;
+        // Eigen::Matrix<double, 4, 4> intrinsic(4,4);
+        // for(int i=0; i < 4;i++){
+        //     for(int j=0;j<4;j++){
+        //         intrinsic(i,j) = camera_param["intrinsic"][i][j].asDouble();
+        //     }
+        // }
+        Eigen::Matrix<double, 3, 4> extrinsic(3,4);
+        extrinsic <<  0.9999840259552002, -0.001818792661651969, -0.0053545720875263214 ,-0.031977910548448563,
+                     0.0023806337267160416, 0.99427056312561035, 0.10686636716127396 ,-0.0020575451198965311,
+                     0.0051295259036123753, -0.1068774089217186, 0.99425899982452393,0.0037713330239057541 ;
+        Eigen::Matrix<double, 3, 3> intrinsic(3,3);
+        intrinsic <<  1018.987548828125, 0.0, 1021.5245361328125,
+                        0.0, 1017.4052734375, 786.01361083984375, 
+                        0.0, 0.0, 1.0 ;
+        projMatrix = intrinsic * extrinsic;
+        // std::cout<<projMatrix<<std::endl;
+        // getchar();
+    }
+
+// const std::vector<cv::Point2f>& AvatarRenderer::getProjectedPoints() const {
+//     if (projectedPoints.empty()) {
+//         projectedPoints.resize(ava.model.numPoints());
+//         for (size_t i = 0; i < ava.cloud.cols(); ++i) {
+//             const auto& pt = ava.cloud.col(i);
+//             projectedPoints[i].x =
+//                 static_cast<double>(pt(0)) * intrin.fx / pt(2) + intrin.cx;
+//             projectedPoints[i].y =
+//                 -static_cast<double>(pt(1)) * intrin.fy / pt(2) + intrin.cy;
+//         }
+//     }
+//     return projectedPoints;
+// }
 
 const std::vector<cv::Point2f>& AvatarRenderer::getProjectedPoints() const {
     if (projectedPoints.empty()) {
         projectedPoints.resize(ava.model.numPoints());
         for (size_t i = 0; i < ava.cloud.cols(); ++i) {
-            const auto& pt = ava.cloud.col(i);
-            projectedPoints[i].x =
-                static_cast<double>(pt(0)) * intrin.fx / pt(2) + intrin.cx;
-            projectedPoints[i].y =
-                -static_cast<double>(pt(1)) * intrin.fy / pt(2) + intrin.cy;
+            Eigen::Matrix<double, 4, 1>  pt(4,1);
+            pt.topRows(3) = ava.cloud.col(i);
+            pt(3,0) = 1;
+            Eigen::Matrix<double, 3, 1> pt2 = projMatrix * pt;
+            projectedPoints[i].x = pt2(0,0) / pt2(2,0);
+            projectedPoints[i].y = pt2(1,0) / pt2(2,0);
         }
     }
     return projectedPoints;

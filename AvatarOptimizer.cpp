@@ -744,13 +744,13 @@ struct Kps2dAutoDiffCostFunctor {
                 commonData.ava.model.numShapeKeys(), 1);
 
         // shapedCloudVec = keyClouds * wMap + baseCloud;
-        shapedCloudVec = commonData.ava.model.keyClouds * wMap + commonData.ava.model.baseCloud;
+        shapedCloudVec.noalias() = commonData.ava.model.keyClouds * wMap + commonData.ava.model.baseCloud;
 
         Eigen::Matrix<T, 3, Eigen::Dynamic> jointPos(3, commonData.ava.model.numJoints());
         Eigen::Map<Eigen::Matrix<T, 3, Eigen::Dynamic>> shapedCloud(shapedCloudVec.data(), 3, commonData.ava.model.numPoints());
 
         // BEGIN_PROFILE;
-        jointPos = shapedCloud * commonData.ava.model.jointRegressor; // very slow
+        jointPos.noalias() = shapedCloud * commonData.ava.model.jointRegressor; // very slow
         // PROFILE(>> jointRegressor);
 
         Eigen::Matrix<T, 12, Eigen::Dynamic> jointTrans(12, commonData.ava.model.numJoints());
@@ -796,13 +796,13 @@ struct Kps2dAutoDiffCostFunctor {
 
         Eigen::Matrix<T, 3, Eigen::Dynamic> jointPosFinal(3, commonData.ava.model.numJoints());
         // jointPosFinal = cloud * jointRegressor.cast<T>(); // very slow
-        jointPosFinal = cloud * commonData.ava.model.jointRegressor;
+        jointPosFinal.noalias() = cloud * commonData.ava.model.jointRegressor;
         
         // process prediction
         Eigen::Matrix<T, 2, Eigen::Dynamic> projectedJoints(
             2, commonData.ava.model.numJoints());
         for (size_t i = 0; i < jointPosFinal.cols(); ++i) {
-            Eigen::Matrix<T, 3, 1> pt = jointPos.col(i);
+            Eigen::Matrix<T, 3, 1> pt = jointPosFinal.col(i);
             projectedJoints(0, i) = pt(0) * (T)commonData.intrin.fx / pt(2) + (T)commonData.intrin.cx;
             projectedJoints(1, i) = pt(1) * (T)commonData.intrin.fy / pt(2) + (T)commonData.intrin.cy;
         }
@@ -822,10 +822,17 @@ struct Kps2dAutoDiffCostFunctor {
         hand_left_kps2d = util::loadFloatMatrix(hand_left_raw, 21, 3).transpose();
         hand_left_kps2d.row(0) =  hand_left_kps2d.row(0) * 1280;
         hand_left_kps2d.row(1) = hand_left_kps2d.row(1) * 720;
+        int ind_right[16] = {21,49,50,51,37,38,39,40,41,42,46,47,48,43,44,45};
+        int ind_left[16] = {20,34,35,36,22,23,24,25,25,26,31,32,33,28,29,30};
+        int ind_hand_mp[16] = {0,1,2,3,5,6,7,9,10,11,13,14,15,17,18,19};
+        for(int i = 0; i<16; i++){
+            gtJoints.col(ind_right[i]) = hand_left_kps2d.col(ind_hand_mp[i]);
+            gtJoints.col(ind_left[i]) = hand_right_kps2d.col(ind_hand_mp[i]);
+        }
 
         // only wrist for debug
-        gtJoints.col(18) = hand_left_kps2d.col(0);
-        gtJoints.col(19) = hand_right_kps2d.col(0);
+        // gtJoints.col(18) = hand_left_kps2d.col(0);
+        // gtJoints.col(19) = hand_right_kps2d.col(0);
         // std::cout << "left hand\n" << hand_left_kps2d.col(0) <<std::endl;
         // std::cout<<"gtjoint:\n"<<gtJoints<<std::endl;
         // gtJoints.array() += 100;
@@ -1386,7 +1393,7 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
 // #endif
 
     // Create separate point cloud for each body part
-    AvatarRenderer renderer(ava, intrin);
+    AvatarRenderer renderer(ava, intrin, "../data/camera_param.json");
     std::vector<bool> pointVisible(ava.cloud.size());
 
     // std::vector<CloudType> partClouds(numParts);
@@ -1462,13 +1469,13 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
     }
 
 
-    const auto& hand_right_raw = kps2d_gt.at("right");
-    util::assertShape(hand_right_raw, {1, 21, 3});
-    Eigen::SparseMatrix<double> hand_right_kps2d;
-    hand_right_kps2d.resize(21, 3);
-    hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3)
-                         .sparseView();
-    hand_right_kps2d.makeCompressed();
+    // const auto& hand_right_raw = kps2d_gt.at("right");
+    // util::assertShape(hand_right_raw, {1, 21, 3});
+    // Eigen::SparseMatrix<double> hand_right_kps2d;
+    // hand_right_kps2d.resize(21, 3);
+    // hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3)
+    //                      .sparseView();
+    // hand_right_kps2d.makeCompressed();
     // std::cout<<hand_right_kps2d<<std::endl;
     // getchar();
 
@@ -1580,8 +1587,8 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         // }
 
         
-        ceres::CostFunction* kps2d_cost_function = new AutoDiffCostFunction<Kps2dAutoDiffCostFunctor, 1, 227>(
-                                                new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
+        // ceres::CostFunction* kps2d_cost_function = new AutoDiffCostFunction<Kps2dAutoDiffCostFunctor, 1, 227>(
+        //                                         new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
         // DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor> *kps2d_cost_function =
         //     new DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor>(
         //         new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
@@ -1616,7 +1623,7 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         }
         kps2d_cost_function->SetNumResiduals(1);
 
-        problem.AddResidualBlock(kps2d_cost_function, NULL, fullParams);
+        // problem.AddResidualBlock(kps2d_cost_function, NULL, fullParams);
 
         /** Scale the function weights according to number of ICP type
          * residuals. Otherwise the function terms become extremely imbalanced
@@ -1668,14 +1675,22 @@ void AvatarOptimizer::optimize(cnpy::npz_t kps2d_gt, int icp_iters, int num_thre
         ava.update();
         PROFILE(>> Finish);
 
+        Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints(
+            3, common.ava.model.numJoints());
+        gtJoints.setZero();
+        const auto& hand_right_raw = kps2d_gt.at("right");
+        Eigen::Matrix<double, 3, 21> hand_right_kps2d;
+        hand_right_kps2d = util::loadFloatMatrix(hand_right_raw, 21, 3).transpose();
+        hand_right_kps2d.row(0) =  hand_right_kps2d.row(0) * 1280;
+        hand_right_kps2d.row(1) = hand_right_kps2d.row(1) * 720;
         std::cout << summary.BriefReport() << "\n";
         Eigen::Matrix<double, 2, 1> projectedJoints(
             2,1);
-        Eigen::Matrix<double, 3, 1> pt = ava.jointPos.col(18);
+        Eigen::Matrix<double, 3, 1> pt = ava.jointPos.col(20);
         projectedJoints(0, 0) = pt(0) * common.intrin.fx / pt(2) + common.intrin.cx;
         projectedJoints(1, 0) = pt(1) * common.intrin.fy / pt(2) + common.intrin.cy;
         std::cout << "wrist : " << projectedJoints.transpose()
-                    << " -> " <<  "354,361" << "\n";
+                    << " -> " <<  hand_right_kps2d.col(0).transpose() << "\n";
         // getchar();
         // std::cout << ava.w.transpose() << "\n";
 

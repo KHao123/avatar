@@ -20,7 +20,7 @@ namespace ark {
         typedef std::pair<float, cv::Vec3i> FaceType;
 
         /** Construct a 2D renderer for given avatar and depth camera intrinsics */
-        AvatarRenderer(const Avatar& ava, const CameraIntrin& intrin);
+        AvatarRenderer(const Avatar& ava, const CameraIntrin& intrin, std::string cameraPath="");
 
         /** Get all projected avatar skin points given dpeth camera calibration intrinsics */
         const std::vector<cv::Point2f>& getProjectedPoints() const;
@@ -59,6 +59,8 @@ namespace ark {
          *  Note: this only changes internal cache state and is thus considered a
          *  'const' function in line with other renderer functions */
         void update() const;
+
+        Eigen::Matrix<double, 3, 4> projMatrix;
 
     private:
         const Avatar& ava;

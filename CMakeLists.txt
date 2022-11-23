@@ -139,6 +139,12 @@ IF(Ceres_FOUND)
     MESSAGE(STATUS "Found Ceres: ${CERES_INCLUDE_DIRS} ${CERES_LIBRARIES}")
 ENDIF(Ceres_FOUND)
 
+# require json
+# find_package( json REQUIRED )
+# IF(jsoncpp_FOUND)
+#     MESSAGE(STATUS "Found jsoncpp: ${JSONCPP_INCLUDE_DIRS} ${JSONCPP_LIBRARIES}")
+# ENDIF(jsoncpp_FOUND)
+
 if ( ${WITH_OMP} )
     find_package( OpenMP )
     if (OPENMP_FOUND)

@@ -717,6 +717,47 @@ struct AvatarShapePriorCostFunctor : ceres::CostFunction {
     const double betaShape;
 };
 
+struct AvatarPoseAnchorCostFunctor : ceres::CostFunction {
+    AvatarPoseAnchorCostFunctor(int numJoint, Eigen::Matrix<double, 3, Eigen::Dynamic> fullpose, double anchor_weight)
+        : numJoint(numJoint), fullpose(fullpose), anchor_weight(anchor_weight) {
+        set_num_residuals(numJoint*3);  
+        std::vector<int> *paramBlockSizes = mutable_parameter_block_sizes();
+        for (int i = 0; i < numJoint; ++i) {
+            paramBlockSizes->push_back(4);  
+        }
+    }
+
+    bool Evaluate(double const *const *parameters, double *residuals,
+                  double **jacobians) const final {
+        const int nResids = numJoint * 3 ;
+        Eigen::VectorXd smplParams(numJoint * 3);
+        for (int i = 0; i < numJoint; ++i) {
+            Eigen::Map<const Eigen::Quaterniond> q(parameters[i]);
+            Eigen::AngleAxisd aa(q);
+            smplParams.segment<3>(i * 3) = aa.axis() * aa.angle();
+        }
+        Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 1>> fullposeVec(fullpose.data(), numJoint*3, 1); // row major ??
+        // std::cout << "full pose\n"<<fullposeVec <<std::endl;
+        // std::cout << "smplParams pose\n"<<smplParams <<std::endl;
+        // getchar();
+        Eigen::Map<Eigen::VectorXd> resid(residuals, nResids);
+        resid.noalias() =  (smplParams - fullposeVec)*
+                          anchor_weight;
+        if (jacobians != nullptr) {
+            if (jacobians[0] != nullptr) {
+                Eigen::Map<Eigen::MatrixXd> J(jacobians[0], numJoint,
+                                              numJoint);
+                J.noalias() =
+                    Eigen::MatrixXd::Identity(numJoint, numJoint) * anchor_weight;
+            }
+        }
+        return true;
+    }
+    int numJoint;
+    const Eigen::Matrix<double, 3, Eigen::Dynamic> fullpose;
+    double anchor_weight;
+};
+
 struct Kps2dAutoDiffCostFunctor {
     Kps2dAutoDiffCostFunctor(
         AvatarEvaluationCommonData &common_data, Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints, Eigen::Matrix<double, 3, 4> projMatrix)
@@ -1348,7 +1389,7 @@ AvatarOptimizer::AvatarOptimizer(Avatar &ava, const CameraIntrin &intrin,
     
 }
 
-void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints, int icp_iters, int num_threads) {
+void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints, Eigen::Matrix<double, 3, Eigen::Dynamic> fullpose, int icp_iters, int num_threads) {
     // Convert to quaternion
     for (int i = 0; i < ava.model.numJoints(); ++i) {
         Eigen::AngleAxisd aa;
@@ -1602,7 +1643,23 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
         }
         kps2d_cost_function->SetNumResiduals(1);
 
-        problem.AddResidualBlock(kps2d_cost_function, NULL, fullParams);
+        // problem.AddResidualBlock(kps2d_cost_function, NULL, fullParams);
+
+        // pose anchor loss
+        double anchor_weight = 0.5;
+        if (anchor_weight > 0){
+            std::vector<double *> poseanchorParams;
+            poseanchorParams.reserve(ava.model.numJoints());
+            for (int i = 0; i < ava.model.numJoints(); ++i) {
+                poseanchorParams.push_back(r[i].coeffs().data());
+            }
+            problem.AddResidualBlock(
+                new AvatarPoseAnchorCostFunctor(ava.model.numJoints(),
+                                                fullpose,
+                                                anchor_weight),
+                NULL, poseanchorParams);
+        }
+        
 
         /** Scale the function weights according to number of ICP type
          * residuals. Otherwise the function terms become extremely imbalanced

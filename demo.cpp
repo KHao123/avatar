@@ -262,7 +262,10 @@ int main(int argc, char** argv) {
         std::string smplx_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/smplx_" + ss_img_id.str() + ".npz";
         cnpy::npz_t smplx_npz = cnpy::npz_load(smplx_npzPath);
         const auto& fullpose_raw = smplx_npz.at("fullpose");
-        Eigen::Matrix<double, 3, 55> fullpose = ark::util::loadFloatMatrix(fullpose_raw, 55, 3).transpose();
+        Eigen::Matrix<double, 3, Eigen::Dynamic> fullpose = ark::util::loadFloatMatrix(fullpose_raw, 55, 3).transpose();
+        fullpose.block(0, 22, 3, 33) = fullpose.block(0, 25, 3, 33);
+    
+        
         const auto& transl_raw = smplx_npz.at("transl");
         Eigen::Matrix<double, 3, 1> transl = ark::util::loadFloatMatrix(transl_raw, 3, 1);
         // cv::Mat depth;
@@ -353,15 +356,8 @@ int main(int argc, char** argv) {
                         ava.p = transl;
                         // std::cout<<"tranl:\n"<<transl<<std::endl;
                         ava.w.setZero();
-                        int j = 0;
-                        for(int i = 0; i < fullpose.cols(); ++i){
-                            // remove head to adapt smplh
-                            if( i == 22 || i == 23 || i == 24){
-                                continue;
-                            }
-                            ava.r[j] = Eigen::AngleAxisd(fullpose.col(i).norm(), fullpose.col(i).normalized()).toRotationMatrix();
-                            j++;
-
+                        for(int i = 0; i < ava.model.numJoints(); ++i){                            
+                            ava.r[i] = Eigen::AngleAxisd(fullpose.col(i).norm(), fullpose.col(i).normalized()).toRotationMatrix();
                         }
                         // ava.r[0] =
                         //     Eigen::AngleAxisd(M_PI, Eigen::Vector3d(0, 1, 0))
@@ -371,7 +367,7 @@ int main(int argc, char** argv) {
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);
                     }
-                    avaOpt.optimize(gtJoints, icpIters,
+                    avaOpt.optimize(gtJoints, fullpose, icpIters,
                                     std::thread::hardware_concurrency());
                     PROFILE(Optimize(Total));
                     printf(

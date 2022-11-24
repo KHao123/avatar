@@ -720,7 +720,8 @@ struct AvatarShapePriorCostFunctor : ceres::CostFunction {
 struct AvatarPoseAnchorCostFunctor : ceres::CostFunction {
     AvatarPoseAnchorCostFunctor(int numJoint, Eigen::Matrix<double, 3, Eigen::Dynamic> fullpose, double anchor_weight)
         : numJoint(numJoint), fullpose(fullpose), anchor_weight(anchor_weight) {
-        set_num_residuals(numJoint*3);  
+        // set_num_residuals(numJoint*3);  
+        set_num_residuals(numJoint*4);  
         std::vector<int> *paramBlockSizes = mutable_parameter_block_sizes();
         for (int i = 0; i < numJoint; ++i) {
             paramBlockSizes->push_back(4);  
@@ -729,29 +730,49 @@ struct AvatarPoseAnchorCostFunctor : ceres::CostFunction {
 
     bool Evaluate(double const *const *parameters, double *residuals,
                   double **jacobians) const final {
-        const int nResids = numJoint * 3 ;
-        Eigen::VectorXd smplParams(numJoint * 3);
-        for (int i = 0; i < numJoint; ++i) {
-            Eigen::Map<const Eigen::Quaterniond> q(parameters[i]);
-            Eigen::AngleAxisd aa(q);
-            smplParams.segment<3>(i * 3) = aa.axis() * aa.angle();
-        }
-        Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 1>> fullposeVec(fullpose.data(), numJoint*3, 1); // row major ??
-        // std::cout << "full pose\n"<<fullposeVec <<std::endl;
-        // std::cout << "smplParams pose\n"<<smplParams <<std::endl;
-        // getchar();
-        Eigen::Map<Eigen::VectorXd> resid(residuals, nResids);
-        resid.noalias() =  (smplParams - fullposeVec)*
-                          anchor_weight;
+        // Eigen::Map<Eigen::VectorXd> resid(residuals, numJoint * 4);
+        Eigen::Map<const Eigen::VectorXd> r(parameters[0], numJoint * 4);
+
+        Eigen::Matrix<double, Eigen::Dynamic, 1> debug_gt(
+            numJoint * 4, 1);
+        debug_gt.setZero();
+        Eigen::Map<Eigen::VectorXd> resid(residuals, numJoint * 4);
+        resid.noalias() =  (r - debug_gt)*
+                          10;
+        // std::cout << "r:\n"<<r <<std::endl;
         if (jacobians != nullptr) {
             if (jacobians[0] != nullptr) {
-                Eigen::Map<Eigen::MatrixXd> J(jacobians[0], numJoint,
-                                              numJoint);
+                Eigen::Map<Eigen::MatrixXd> J(jacobians[0], numJoint * 4,
+                                              numJoint * 4);
                 J.noalias() =
-                    Eigen::MatrixXd::Identity(numJoint, numJoint) * anchor_weight;
+                    Eigen::MatrixXd::Identity(numJoint * 4, numJoint * 4) * 10;
             }
         }
         return true;
+
+        // const int nResids = numJoint * 3 ;
+        // Eigen::VectorXd smplParams(numJoint * 3);
+        // for (int i = 0; i < numJoint; ++i) {
+        //     Eigen::Map<const Eigen::Quaterniond> q(parameters[i]);
+        //     Eigen::AngleAxisd aa(q);
+        //     smplParams.segment<3>(i * 3) = aa.axis() * aa.angle();
+        // }
+        // Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 1>> fullposeVec(fullpose.data(), numJoint*3, 1); // row major ??
+        // // std::cout << "full pose\n"<<fullposeVec <<std::endl;
+        // // std::cout << "smplParams pose\n"<<smplParams <<std::endl;
+        // // getchar();
+        // Eigen::Map<Eigen::VectorXd> resid(residuals, nResids);
+        // resid.noalias() =  (smplParams - fullposeVec)*
+        //                   anchor_weight;
+        // if (jacobians != nullptr) {
+        //     if (jacobians[0] != nullptr) {
+        //         Eigen::Map<Eigen::MatrixXd> J(jacobians[0], numJoint,
+        //                                       numJoint);
+        //         J.noalias() =
+        //             Eigen::MatrixXd::Identity(numJoint, numJoint) * anchor_weight;
+        //     }
+        // }
+        // return true;
     }
     int numJoint;
     const Eigen::Matrix<double, 3, Eigen::Dynamic> fullpose;
@@ -1679,7 +1700,7 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
         // }
         // problem.AddResidualBlock(
         //     new AvatarShapePriorCostFunctor(ava.model.numShapeKeys(),
-        //                                     common.scaledBetaShape),
+        //                                     5),
         //     NULL, ava.w.data());
         
         PROFILE(>> Construct problem : residual blocks);
@@ -1691,17 +1712,19 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
 
         // Run solver
         Solver::Summary summary;
-        // PROFILE(>> Render in PCL);
-
+        // PROFILE(>> Render in PCL)
+        std::cout << "initial r:\n" << r[0].coeffs().transpose() <<std::endl;
+         std::cout<< "inittial shape: \n" << ava.w.transpose() << std::endl;
         ceres::Solve(options, &problem, &summary);  // 35 ms
 
         PROFILE(>> Solve);
-        // std::cout << "initial r:\n" << r[0].coeffs().transpose() <<std::endl;
+        std::cout << "end r:\n" << r[0].coeffs().transpose() <<std::endl;
         // std::cout<< "debug transl: \n" << ava.p.transpose() << std::endl;
         // std::cout<< "debug pose: \n" << r.transpose() << std::endl;
-        // std::cout<< "debug shape: \n" << ava.w.transpose() << std::endl;
+        std::cout<< "debug shape: \n" << ava.w.transpose() << std::endl;
         // output (for debugging)
         // std::cout << summary.FullReport() << "\n";
+        // getchar();
         
 
         // Convert from quaternion

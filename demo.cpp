@@ -355,14 +355,15 @@ int main(int argc, char** argv) {
                         // ava.p = Eigen::Vector3d(0, 0, 1);
                         ava.p = transl;
                         // std::cout<<"tranl:\n"<<transl<<std::endl;
-                        ava.w.setZero();
+                        // ava.w.setZero();
+                        ava.w.setConstant(2);
                         for(int i = 0; i < ava.model.numJoints(); ++i){                            
                             ava.r[i] = Eigen::AngleAxisd(fullpose.col(i).norm(), fullpose.col(i).normalized()).toRotationMatrix();
                         }
                         // ava.r[0] =
                         //     Eigen::AngleAxisd(M_PI, Eigen::Vector3d(0, 1, 0))
                         //         .toRotationMatrix();
-                        reinit = false;
+                        // reinit = false;
                         ava.update();
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);

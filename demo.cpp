@@ -214,7 +214,7 @@ int main(int argc, char** argv) {
         //     std::cerr << "WARNING: no more images found, exiting\n";
         //     break;
         // }
-        std::cout<<imageRGB.size()<<std::endl;
+        std::cout << imageRGB.size() << std::endl;
         if (imageRGB.empty()) {
             std::cerr << "WARNING: no more images found, exiting\n";
             break;
@@ -238,6 +238,9 @@ int main(int argc, char** argv) {
         keypoints = ark::util::loadFloatMatrix(keypoints_raw, 127, 3).transpose();
         keypoints.row(0) =  keypoints.row(0) * 2048;
         keypoints.row(1) = keypoints.row(1) * 1536;
+
+
+        // convert smplx to smplh (TODO: update the right version)
         int j = 0;
         for(int i = 0; i < 55; ++i){
             // remove head to adapt smplh
@@ -250,12 +253,11 @@ int main(int argc, char** argv) {
 
         // select point with high confidence
         gtJoints.row(2) = (gtJoints.row(2).array() > 0.3 ).select(gtJoints.row(2), 0);
-        // delete special joints
+        // delete special joints (TODO: check why)
         int ignored_joints[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
         for(int i=0;i<sizeof(ignored_joints)/sizeof(ignored_joints[0]);i++){
             gtJoints(2,ignored_joints[i]) = 0;
         }
-
 
         // std::cout<<"gt:\n"<<gtJoints.transpose()<<std::endl;
         // getchar();
@@ -279,7 +281,7 @@ int main(int argc, char** argv) {
         // std::cout<<compsBySize.size()<<std::endl;
         // cv::Mat sub =
         //     bgsub.run(image, &compsBySize);
-        PROFILE(BG Subtraction);
+        // PROFILE(BG Subtraction);
         
         cv::Mat vis(imageRGB.size(), CV_8UC3);
         // for (int r = bgsub.topLeft.y; r <= bgsub.botRight.y; ++r) {
@@ -303,6 +305,7 @@ int main(int argc, char** argv) {
             //                   std::thread::hardware_concurrency(),
             //                   bgsub.topLeft, bgsub.botRight);
             // PROFILE(RTree postproc);
+            std::cout << "rtree: " << rtreeOnly << std::endl;
             if (rtreeOnly) {
                 for (int r = bgsub.topLeft.y; r <= bgsub.botRight.y; ++r) {
                     // auto* inPtr = result.ptr<uint8_t>(r);
@@ -324,7 +327,7 @@ int main(int argc, char** argv) {
                     }
                 }
                 if (true) {
-                    ark::CloudType dataCloud(3, cnz);
+                    // ark::CloudType dataCloud(3, cnz);
                     // Eigen::VectorXi dataPartLabels(cnz);
                     // size_t i = 0;
                     // for (int r = bgsub.topLeft.y; r <= bgsub.botRight.y;
@@ -368,8 +371,8 @@ int main(int argc, char** argv) {
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);
                     }
-                    avaOpt.optimize(gtJoints, fullpose, icpIters,
-                                    std::thread::hardware_concurrency());
+                    // avaOpt.optimize(gtJoints, fullpose, icpIters,
+                    //                 std::thread::hardware_concurrency());
                     PROFILE(Optimize(Total));
                     printf(
                         "Overall (excluding visualization): %f ms\n",
@@ -430,7 +433,9 @@ int main(int argc, char** argv) {
         // cv::rectangle(vis, bgsub.topLeft, bgsub.botRight,
         // cv::Scalar(0,0,255));
 
-        cv::imshow("Visual", vis);
+        // cv::imshow("Visual", vis);
+        cv::imwrite("proj_debug.jpg", vis);
+        break;
         // cv::imshow("Depth", depth);
         ++imId;
         int k = cv::waitKey(1);

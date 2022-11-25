@@ -226,7 +226,7 @@ int main(int argc, char** argv) {
         cnpy::npz_t kps2d_npz = cnpy::npz_load(kps2d_npzPath);
         std::cout << kps2d_npzPath << std::endl;
         Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints(
-            3, ava.model.numJoints());
+            3, ava.model.numJoints() + 15);
         gtJoints.setZero();
        
         const auto& mask_raw = kps2d_npz.at("mask");
@@ -242,9 +242,9 @@ int main(int argc, char** argv) {
 
         // convert smplx to smplh (TODO: update the right version)
         int j = 0;
-        for(int i = 0; i < 55; ++i){
+        for(int i = 0; i < 76; ++i){
             // remove head to adapt smplh
-            if( i == 22 || i == 23 || i == 24){
+            if( i == 22 || i == 23 || i == 24 || i==60 || i == 61|| i == 62|| i == 63|| i == 64|| i == 65){
                 continue;
             }
             gtJoints.col(j) = keypoints.col(i);
@@ -257,6 +257,10 @@ int main(int argc, char** argv) {
         int ignored_joints[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
         for(int i=0;i<sizeof(ignored_joints)/sizeof(ignored_joints[0]);i++){
             gtJoints(2,ignored_joints[i]) = 0;
+        }
+        int hand_joints[] = {25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,57,58,59,60,61,62,63,64,65,66};
+        for(int i=0;i<sizeof(hand_joints)/sizeof(hand_joints[0]);i++){
+            gtJoints(2, hand_joints[i]) = 10;
         }
 
         // std::cout<<"gt:\n"<<gtJoints.transpose()<<std::endl;
@@ -358,15 +362,15 @@ int main(int argc, char** argv) {
                         // ava.p = Eigen::Vector3d(0, 0, 1);
                         ava.p = transl;
                         // std::cout<<"tranl:\n"<<transl<<std::endl;
-                        // ava.w.setZero();
-                        ava.w.setConstant(2);
+                        ava.w.setZero();
+                        // ava.w.setConstant(2);
                         for(int i = 0; i < ava.model.numJoints(); ++i){                            
                             ava.r[i] = Eigen::AngleAxisd(fullpose.col(i).norm(), fullpose.col(i).normalized()).toRotationMatrix();
                         }
                         // ava.r[0] =
                         //     Eigen::AngleAxisd(M_PI, Eigen::Vector3d(0, 1, 0))
                         //         .toRotationMatrix();
-                        // reinit = false;
+                        reinit = false;
                         ava.update();
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);

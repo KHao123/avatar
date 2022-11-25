@@ -812,9 +812,9 @@ struct Kps2dAutoDiffCostFunctor {
         Eigen::Matrix<T, 3, Eigen::Dynamic> jointPos(3, commonData.ava.model.numJoints());
         Eigen::Map<Eigen::Matrix<T, 3, Eigen::Dynamic>> shapedCloud(shapedCloudVec.data(), 3, commonData.ava.model.numPoints());
 
-        // BEGIN_PROFILE;
+        BEGIN_PROFILE;
         jointPos.noalias() = shapedCloud * commonData.ava.model.jointRegressor; // very slow
-        // PROFILE(>> jointRegressor);
+        PROFILE(>> jointRegressor);
 
         Eigen::Matrix<T, 12, Eigen::Dynamic> jointTrans(12, commonData.ava.model.numJoints());
         using TransformMap = Eigen::Map<Eigen::Matrix<T, 3, 4>>;
@@ -844,6 +844,7 @@ struct Kps2dAutoDiffCostFunctor {
             jointPos.col(i) = jti.rightCols(1);
             jti.rightCols(1) -= jti.leftCols(3) * jPosInit;
         }
+        PROFILE(>> Kintree);
         
         Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(3, commonData.ava.model.numPoints());
         // init weight
@@ -852,15 +853,21 @@ struct Kps2dAutoDiffCostFunctor {
         // weights = commonData.ava.model.weights;
         // Eigen::Matrix<T, 12, Eigen::Dynamic> pointTrans = jointTrans * weights.cast<T>();
         Eigen::Matrix<T, 12, Eigen::Dynamic> pointTrans = jointTrans * commonData.ava.model.weights;
+        PROFILE(>> pointTrans);
         for (size_t i = 0; i < commonData.ava.model.numPoints(); ++i) {
             TransformMap pti(pointTrans.col(i).data());
             cloud.col(i) = pti * shapedCloud.col(i).homogeneous();
         }
 
-        Eigen::Matrix<T, 3, Eigen::Dynamic> jointPosFinal(3, commonData.ava.model.numJoints());
+        Eigen::Matrix<T, 3, Eigen::Dynamic> jointPosFinal(3, commonData.ava.model.numJoints()+15);
         // jointPosFinal = cloud * jointRegressor.cast<T>(); // very slow
-        jointPosFinal.noalias() = cloud * commonData.ava.model.jointRegressor;
-        
+        jointPosFinal.leftCols(commonData.ava.model.numJoints()).noalias() = cloud * commonData.ava.model.jointRegressor;
+        // add extra joint for smplh (face, left_hand, right_hand)
+        int extra_id[] = {332, 6260, 2800, 4071, 583, 2746, 2319, 2445, 2556, 2673, 6191, 5782, 5905, 6016, 6133};
+        for(int i=0;i<15;i++){
+            jointPosFinal.col(i).noalias() += cloud.col(extra_id[i]);
+        }
+
         // process prediction
         // Eigen::Matrix<T, 2, Eigen::Dynamic> projectedJoints(
         //     2, commonData.ava.model.numJoints());
@@ -870,7 +877,7 @@ struct Kps2dAutoDiffCostFunctor {
         //     projectedJoints(1, i) = pt(1) * (T)commonData.intrin.fy / pt(2) + (T)commonData.intrin.cy;
         // }
         Eigen::Matrix<T, 2, Eigen::Dynamic> projectedJoints(
-            2, commonData.ava.model.numJoints());
+            2, jointPosFinal.cols());
         for (size_t i = 0; i < jointPosFinal.cols(); ++i) {
             Eigen::Matrix<T, 4, 1>  pt(4,1);
             pt.topRows(3) = jointPosFinal.col(i);
@@ -1664,22 +1671,22 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
         }
         kps2d_cost_function->SetNumResiduals(1);
 
-        // problem.AddResidualBlock(kps2d_cost_function, NULL, fullParams);
+        problem.AddResidualBlock(kps2d_cost_function, NULL, fullParams);
 
         // pose anchor loss
-        double anchor_weight = 0.5;
-        if (anchor_weight > 0){
-            std::vector<double *> poseanchorParams;
-            poseanchorParams.reserve(ava.model.numJoints());
-            for (int i = 0; i < ava.model.numJoints(); ++i) {
-                poseanchorParams.push_back(r[i].coeffs().data());
-            }
-            problem.AddResidualBlock(
-                new AvatarPoseAnchorCostFunctor(ava.model.numJoints(),
-                                                fullpose,
-                                                anchor_weight),
-                NULL, poseanchorParams);
-        }
+        // double anchor_weight = 0.5;
+        // if (anchor_weight > 0){
+        //     std::vector<double *> poseanchorParams;
+        //     poseanchorParams.reserve(ava.model.numJoints());
+        //     for (int i = 0; i < ava.model.numJoints(); ++i) {
+        //         poseanchorParams.push_back(r[i].coeffs().data());
+        //     }
+        //     problem.AddResidualBlock(
+        //         new AvatarPoseAnchorCostFunctor(ava.model.numJoints(),
+        //                                         fullpose,
+        //                                         anchor_weight),
+        //         NULL, poseanchorParams);
+        // }
         
 
         /** Scale the function weights according to number of ICP type
@@ -1687,7 +1694,7 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
          * in some cases.
          */
         // common.scaledBetaPose = betaPose * std::sqrt(totalResiduals) / 15.;
-        common.scaledBetaShape = 100;
+        // common.scaledBetaShape = 100;
 
         // std::vector<double *> posePriorParams;
         // posePriorParams.reserve(ava.model.numJoints() - 1);
@@ -1713,15 +1720,15 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
         // Run solver
         Solver::Summary summary;
         // PROFILE(>> Render in PCL)
+        std::cout<< "initial transl: \n" << ava.p.transpose() << std::endl;
         std::cout << "initial r:\n" << r[0].coeffs().transpose() <<std::endl;
-         std::cout<< "inittial shape: \n" << ava.w.transpose() << std::endl;
+        std::cout<< "inittial shape: \n" << ava.w.transpose() << std::endl;
         ceres::Solve(options, &problem, &summary);  // 35 ms
 
         PROFILE(>> Solve);
-        std::cout << "end r:\n" << r[0].coeffs().transpose() <<std::endl;
-        // std::cout<< "debug transl: \n" << ava.p.transpose() << std::endl;
-        // std::cout<< "debug pose: \n" << r.transpose() << std::endl;
-        std::cout<< "debug shape: \n" << ava.w.transpose() << std::endl;
+        std::cout<< "optimized transl: \n" << ava.p.transpose() << std::endl;
+        std::cout << "optimized r:\n" << r[0].coeffs().transpose() <<std::endl;
+        std::cout<< "optimized shape: \n" << ava.w.transpose() << std::endl;
         // output (for debugging)
         // std::cout << summary.FullReport() << "\n";
         // getchar();

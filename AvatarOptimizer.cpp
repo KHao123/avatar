@@ -844,9 +844,9 @@ struct Kps2dAutoDiffCostFunctor {
         Eigen::Matrix<T, 3, Eigen::Dynamic> jointPos(3, commonData.ava.model.numJoints());
         Eigen::Map<Eigen::Matrix<T, 3, Eigen::Dynamic>> shapedCloud(shapedCloudVec.data(), 3, commonData.ava.model.numPoints());
 
-        // BEGIN_PROFILE;
+        BEGIN_PROFILE;
         jointPos.noalias() = shapedCloud * commonData.ava.model.jointRegressor; // very slow
-        // PROFILE(>> jointRegressor);
+        PROFILE(>> jointRegressor);
 
         Eigen::Matrix<T, 12, Eigen::Dynamic> jointTrans(12, commonData.ava.model.numJoints());
         using TransformMap = Eigen::Map<Eigen::Matrix<T, 3, 4>>;
@@ -876,6 +876,7 @@ struct Kps2dAutoDiffCostFunctor {
             jointPos.col(i) = jti.rightCols(1);
             jti.rightCols(1) -= jti.leftCols(3) * jPosInit;
         }
+        PROFILE(>> Kintree);
         
         Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(3, commonData.ava.model.numPoints());
         // init weight
@@ -884,6 +885,7 @@ struct Kps2dAutoDiffCostFunctor {
         // weights = commonData.ava.model.weights;
         // Eigen::Matrix<T, 12, Eigen::Dynamic> pointTrans = jointTrans * weights.cast<T>();
         Eigen::Matrix<T, 12, Eigen::Dynamic> pointTrans = jointTrans * commonData.ava.model.weights;
+        PROFILE(>> pointTrans);
         for (size_t i = 0; i < commonData.ava.model.numPoints(); ++i) {
             TransformMap pti(pointTrans.col(i).data());
             cloud.col(i) = pti * shapedCloud.col(i).homogeneous();

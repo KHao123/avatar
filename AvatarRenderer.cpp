@@ -76,6 +76,7 @@ const std::vector<cv::Point2f>& AvatarRenderer::getProjectedPoints() const {
 }
 
 const std::vector<cv::Point2f>& AvatarRenderer::getProjectedJoints() const {
+    assert(false && "Check code before calling this function");
     if (projectedJoints.empty()) {
         projectedJoints.resize(ava.model.numJoints());
         for (size_t i = 0; i < ava.jointPos.cols(); ++i) {

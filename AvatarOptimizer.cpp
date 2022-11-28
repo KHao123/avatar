@@ -733,19 +733,30 @@ struct AvatarPoseAnchorCostFunctor : ceres::CostFunction {
         // Eigen::Map<Eigen::VectorXd> resid(residuals, numJoint * 4);
         Eigen::Map<const Eigen::VectorXd> r(parameters[0], numJoint * 4);
 
-        Eigen::Matrix<double, Eigen::Dynamic, 1> debug_gt(
-            numJoint * 4, 1);
-        debug_gt.setZero();
+        // Eigen::Matrix<double, Eigen::Dynamic, 1> fullposeVec(
+        //     numJoint * 4, 1);
+        // fullposeVec.setZero();
+        Eigen::Matrix<double, 4, Eigen::Dynamic, Eigen::RowMajor> fullpose_r(4, numJoint);
+        for(int i = 0; i < numJoint; ++i){                            
+            // fullpose_r.col(i) = Eigen::Quaterniond(Eigen::AngleAxisd(fullpose.col(i).norm(), fullpose.col(i).normalized())).coeffs();
+            // Eigen::Matrix3d m;
+            // m.setIdentity();
+            // Eigen::AngleAxisd aa;
+            // aa.fromRotationMatrix(m);
+            fullpose_r.col(i) = Eigen::Quaterniond(Eigen::AngleAxisd(0, Eigen::Vector3d(0, 1, 0))).coeffs();
+        }
+        fullpose_r.col(0) = Eigen::Quaterniond(Eigen::AngleAxisd(M_PI, Eigen::Vector3d(0, 0, 1))).coeffs();
+        Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 1>> fullposeVec(fullpose_r.data(), numJoint*4, 1); // row major ??
         Eigen::Map<Eigen::VectorXd> resid(residuals, numJoint * 4);
-        resid.noalias() =  (r - debug_gt)*
-                          10;
-        // std::cout << "r:\n"<<r <<std::endl;
+        resid.noalias() =  (r - fullposeVec)*
+                          anchor_weight;
+        std::cout <<"resid:\n"<< resid << std::endl;
         if (jacobians != nullptr) {
             if (jacobians[0] != nullptr) {
                 Eigen::Map<Eigen::MatrixXd> J(jacobians[0], numJoint * 4,
                                               numJoint * 4);
                 J.noalias() =
-                    Eigen::MatrixXd::Identity(numJoint * 4, numJoint * 4) * 10;
+                    Eigen::MatrixXd::Identity(numJoint * 4, numJoint * 4) * anchor_weight;
             }
         }
         return true;
@@ -778,6 +789,27 @@ struct AvatarPoseAnchorCostFunctor : ceres::CostFunction {
     const Eigen::Matrix<double, 3, Eigen::Dynamic> fullpose;
     double anchor_weight;
 };
+
+struct AvatarPoseAnchorCostFunctor_2 {
+    AvatarPoseAnchorCostFunctor_2(Eigen::Matrix<double, 3, Eigen::Dynamic> fullpose, double anchor_weight)
+        :  fullpose(fullpose), anchor_weight(anchor_weight){
+    }
+    template <class T>
+    bool operator()(T const *const *params, T *residual) const {
+        Eigen::Map<const Eigen::Matrix<T, 4, Eigen::Dynamic>> pose(params[0 + 1], 4, fullpose.cols());
+        Eigen::Matrix<double, 4, Eigen::Dynamic, Eigen::RowMajor> fullpose_r(4, fullpose.cols());
+        for(int i = 0; i < fullpose.cols(); ++i){                            
+            fullpose_r.col(i) = Eigen::Quaterniond(Eigen::AngleAxisd(fullpose.col(i).norm(), fullpose.col(i).normalized())).coeffs();
+        }
+        Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 1>> fullposeVec(fullpose_r.data(), fullpose.cols()*4, 1); // row major ??
+        residual[0] = (pose - fullposeVec).cwiseAbs2().sum();
+       
+        return true;
+    }
+    const Eigen::Matrix<double, 3, Eigen::Dynamic> fullpose;
+    double anchor_weight;
+};
+
 
 struct Kps2dAutoDiffCostFunctor {
     Kps2dAutoDiffCostFunctor(
@@ -861,9 +893,11 @@ struct Kps2dAutoDiffCostFunctor {
         // jointPosFinal = cloud * jointRegressor.cast<T>(); // very slow
         jointPosFinal.leftCols(commonData.ava.model.numJoints()).noalias() = cloud * commonData.ava.model.jointRegressor;
         // add extra joint for smplh
-        int extra_id[] = {332, 6260, 2800, 4071, 583, 2746, 2319, 2445, 2556, 2673, 6191, 5782, 5905, 6016, 6133};
+        // int extra_id[] = {332, 6260, 2800, 4071, 583, 2746, 2319, 2445, 2556, 2673, 6191, 5782, 5905, 6016, 6133};
+        // add extra joint for smplx
+        int extra_id[] = {9120, 9929, 9448, 616, 6, 5361, 4933, 5058, 5169, 5286, 8079, 7669, 7794, 7905, 8022};
         for(int i=0;i<15;i++){
-            jointPosFinal.col(i).noalias() += cloud.col(extra_id[i]);
+            jointPosFinal.col(i+55).noalias() = cloud.col(extra_id[i]);
         }
 
         // process prediction
@@ -887,6 +921,91 @@ struct Kps2dAutoDiffCostFunctor {
         
         residual[0] =  ((projectedJoints - gtJoints.topRows(2)).cwiseAbs2().colwise().sum().cwiseSqrt().cwiseProduct(gtJoints.row(2))).sum();
 
+        return true;
+    }
+    AvatarEvaluationCommonData &commonData;
+    Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints;
+    Eigen::Matrix<double, 3, 4> projMatrix;
+};
+
+struct Kps2dAutoDiffCostFunctor_2 {
+    Kps2dAutoDiffCostFunctor_2(
+        AvatarEvaluationCommonData &common_data, Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints, Eigen::Matrix<double, 3, 4> projMatrix)
+        : commonData(common_data),
+          gtJoints(gtJoints),
+          projMatrix(projMatrix) {
+        // pointId = commonData.caches[cacheId].pointId;
+    }
+    template <class T>
+    bool operator()(T const *const *params, T *residual) const {
+        Eigen::Matrix<double, Eigen::Dynamic, 1> shapedCloudVec(3 * commonData.ava.model.numPoints());
+
+        shapedCloudVec.noalias() = commonData.ava.model.keyClouds * commonData.ava.w + commonData.ava.model.baseCloud;
+
+        Eigen::Matrix<double, 3, Eigen::Dynamic> jointPos(3, commonData.ava.model.numJoints());
+        Eigen::Map<Eigen::Matrix<double, 3, Eigen::Dynamic>> shapedCloud(shapedCloudVec.data(), 3, commonData.ava.model.numPoints());
+
+        jointPos.noalias() = shapedCloud * commonData.ava.model.jointRegressor;
+
+        Eigen::Matrix<T, 12, Eigen::Dynamic> jointTrans(12, commonData.ava.model.numJoints());
+        using TransformMap = Eigen::Map<Eigen::Matrix<T, 3, 4>>;
+        using ConstQuatMap = Eigen::Map<const Eigen::Quaternion<T>>;
+        using ConstVecMap = Eigen::Map<const Eigen::Matrix<T, 3, 1>>;
+
+
+        TransformMap jt0(jointTrans.data());
+        // jt0.leftCols(3) = ConstQuatMap(params[0 + 1]).toRotationMatrix();
+        // jt0.rightCols(1) = ConstVecMap(params[0]); // Root position at center (non-standard!)
+        jt0.leftCols(3) += Eigen::Map<Eigen::Matrix<double, 3, 3>>(commonData.ava.r[0].data());
+        jt0.rightCols(1) += Eigen::Map<Eigen::Matrix<double, 3, 1>>(commonData.ava.p.data());
+        
+        for (size_t i = 1; i < commonData.ava.model.numJoints(); ++i) {
+            TransformMap jti(jointTrans.col(i).data());
+            jti.leftCols(3) = ConstQuatMap(params[i + 1]).toRotationMatrix();
+            jti.rightCols(1) +=
+                jointPos.col(i) - jointPos.col(commonData.ava.model.parent[i]);
+            util::mulAffine<T, Eigen::ColMajor>(
+                TransformMap(jointTrans.col(commonData.ava.model.parent[i]).data()), jti);
+        }
+
+        for (int i = 0; i < commonData.ava.model.numJoints(); ++i) {
+            TransformMap jti(jointTrans.col(i).data());
+            Eigen::Matrix<T, 3, 1> jPosInit;
+            jPosInit += jointPos.col(i);
+            // jointPos.col(i) = jti.rightCols(1);
+            jti.rightCols(1) -= jti.leftCols(3) * jPosInit;
+        }
+        
+        Eigen::Matrix<T, 3, Eigen::Dynamic> cloud(3, commonData.ava.model.numPoints());
+
+        Eigen::Matrix<T, 12, Eigen::Dynamic> pointTrans = jointTrans * commonData.ava.model.weights;
+        for (size_t i = 0; i < commonData.ava.model.numPoints(); ++i) {
+            TransformMap pti(pointTrans.col(i).data());
+            cloud.col(i) = pti * shapedCloud.col(i).homogeneous();
+        }
+
+        Eigen::Matrix<T, 3, Eigen::Dynamic> jointPosFinal(3, commonData.ava.model.numJoints()+15);
+        jointPosFinal.leftCols(commonData.ava.model.numJoints()).noalias() = cloud * commonData.ava.model.jointRegressor;
+
+        int extra_id[] = {9120, 9929, 9448, 616, 6, 5361, 4933, 5058, 5169, 5286, 8079, 7669, 7794, 7905, 8022};
+        for(int i=0;i<15;i++){
+            jointPosFinal.col(i+55).noalias() = cloud.col(extra_id[i]);
+        }
+
+        Eigen::Matrix<T, 2, Eigen::Dynamic> projectedJoints(
+            2, jointPosFinal.cols());
+        for (size_t i = 0; i < jointPosFinal.cols(); ++i) {
+            Eigen::Matrix<T, 4, 1>  pt(4,1);
+            pt.topRows(3) = jointPosFinal.col(i);
+            pt(3,0) += 1;
+            Eigen::Matrix<T, 3, 1> pt2 = projMatrix * pt;
+            projectedJoints(0, i) = pt2(0,0) / pt2(2,0);
+            projectedJoints(1, i) = pt2(1,0) / pt2(2,0);
+        }
+        
+        residual[0] =  ((projectedJoints - gtJoints.topRows(2)).cwiseAbs2().colwise().sum().cwiseSqrt().cwiseProduct(gtJoints.row(2))).sum();
+        // Eigen::Map<Eigen::VectorXd<T>> resid(residual, commonData.ava.model.numJoints()+15);
+        // residual =  (projectedJoints - gtJoints.topRows(2)).cwiseAbs2().colwise().sum().cwiseSqrt().cwiseProduct(gtJoints.row(2));
         return true;
     }
     AvatarEvaluationCommonData &commonData;
@@ -1588,8 +1707,9 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
             new ceres::FakeQuaternionParameterization();
         problem.AddParameterBlock(ava.p.data(), 3);
         for (int i = 0; i < ava.model.numJoints(); ++i) {
-            problem.AddParameterBlock(r[i].coeffs().data(), ROT_SIZE,
-                                      fakeQuaternionLocalParam);
+            // problem.AddParameterBlock(r[i].coeffs().data(), ROT_SIZE,
+            //                           fakeQuaternionLocalParam);
+            problem.AddParameterBlock(r[i].coeffs().data(), ROT_SIZE);
         }
         if (common.shapeEnabled) {
             problem.AddParameterBlock(ava.w.data(), ava.model.numShapeKeys());
@@ -1632,6 +1752,7 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
         //     ++cid;
         // }
 
+       
         
         // ceres::CostFunction* kps2d_cost_function = new AutoDiffCostFunction<Kps2dAutoDiffCostFunctor, 1, 227>(
         //                                         new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
@@ -1639,9 +1760,13 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
         //     new DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor>(
         //         new Kps2dAutoDiffCostFunctor(common, kps2d_gt));
 
-        DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor> *kps2d_cost_function =
-            new DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor>(
-                new Kps2dAutoDiffCostFunctor(common, gtJoints, renderer.projMatrix));
+        // DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor> *kps2d_cost_function =
+        //     new DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor>(
+        //         new Kps2dAutoDiffCostFunctor(common, gtJoints, renderer.projMatrix));
+
+        DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor_2> *kps2d_cost_function =
+            new DynamicAutoDiffCostFunction<Kps2dAutoDiffCostFunctor_2>(
+                new Kps2dAutoDiffCostFunctor_2(common, gtJoints, renderer.projMatrix));
 
         // kps2d_cost_function->AddParameterBlock(3);
         // for (int k = 0; k < ava.model.numJoints(); ++k) {
@@ -1651,40 +1776,51 @@ void AvatarOptimizer::optimize(Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints
         //     kps2d_cost_function->AddParameterBlock(ava.model.numShapeKeys());
         // }
         // kps2d_cost_function->SetNumResiduals(1);
-
+        double anchor_weight = 0.5;
+        DynamicAutoDiffCostFunction<AvatarPoseAnchorCostFunctor_2> *pose_cost_function =
+                new DynamicAutoDiffCostFunction<AvatarPoseAnchorCostFunctor_2>(
+                    new AvatarPoseAnchorCostFunctor_2(fullpose, anchor_weight));
 
         std::vector<double *> fullParams;
         fullParams.reserve(ava.model.numJoints() + 1);
+        // fullParams.reserve(ava.model.numJoints());
         fullParams.push_back(ava.p.data());
         kps2d_cost_function->AddParameterBlock(3);
+        pose_cost_function->AddParameterBlock(3);
         for (int i = 0; i < ava.model.numJoints(); ++i) {
             fullParams.push_back(r[i].coeffs().data()); // ava.r 和 r不是一个格式
             kps2d_cost_function->AddParameterBlock(4);
+            pose_cost_function->AddParameterBlock(4);
             
         }
         
-        if (common.shapeEnabled) {
-            fullParams.push_back(ava.w.data());
-            kps2d_cost_function->AddParameterBlock(ava.model.numShapeKeys());
-        }
+        // if (common.shapeEnabled) {
+        //     fullParams.push_back(ava.w.data());
+        //     kps2d_cost_function->AddParameterBlock(ava.model.numShapeKeys());
+        // }
         kps2d_cost_function->SetNumResiduals(1);
+        pose_cost_function->SetNumResiduals(1);
+        // kps2d_cost_function->SetNumResiduals(ava.model.numJoints() + 15);
 
         problem.AddResidualBlock(kps2d_cost_function, NULL, fullParams);
 
         // pose anchor loss
-        // double anchor_weight = 0.5;
-        // if (anchor_weight > 0){
-        //     std::vector<double *> poseanchorParams;
-        //     poseanchorParams.reserve(ava.model.numJoints());
-        //     for (int i = 0; i < ava.model.numJoints(); ++i) {
-        //         poseanchorParams.push_back(r[i].coeffs().data());
-        //     }
-        //     problem.AddResidualBlock(
-        //         new AvatarPoseAnchorCostFunctor(ava.model.numJoints(),
-        //                                         fullpose,
-        //                                         anchor_weight),
-        //         NULL, poseanchorParams);
-        // }
+        
+        if (anchor_weight > 0){
+            // std::vector<double *> poseanchorParams;
+            // poseanchorParams.reserve(ava.model.numJoints());
+            // for (int i = 0; i < ava.model.numJoints(); ++i) {
+            //     poseanchorParams.push_back(r[i].coeffs().data());
+            // }
+            // problem.AddResidualBlock(
+            //     new AvatarPoseAnchorCostFunctor(ava.model.numJoints(),
+            //                                     fullpose,
+            //                                     anchor_weight),
+            //     NULL, poseanchorParams);
+
+
+            problem.AddResidualBlock(pose_cost_function, NULL, fullParams);
+        }
         
 
         /** Scale the function weights according to number of ICP type

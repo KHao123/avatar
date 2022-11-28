@@ -193,7 +193,6 @@ int main(int argc, char** argv) {
         std::stringstream ss_img_id;
         ss_img_id << std::setw(padSize) << std::setfill('0')
                   << std::to_string(imId);
-        std::cout<<"######1\n";
         // std::string inPath = (path(datasetPath) / "depth_exr" /
         //                       ("depth_" + ss_img_id.str() + ".exr"))
         //                          .string();
@@ -214,7 +213,7 @@ int main(int argc, char** argv) {
         //     std::cerr << "WARNING: no more images found, exiting\n";
         //     break;
         // }
-        std::cout<<imageRGB.size()<<std::endl;
+        // std::cout<<imageRGB.size()<<std::endl;
         if (imageRGB.empty()) {
             std::cerr << "WARNING: no more images found, exiting\n";
             break;
@@ -224,7 +223,7 @@ int main(int argc, char** argv) {
         std::string kps2d_npzPath = "../data/SH_k4a_contact_stream_file_wbg_ljq_avatar/annotation_" + ss_img_id.str() + ".npz";
         // std::string kps2d_npzPath = "../data/conference-room-kps2d/annotation_0158.npz";
         cnpy::npz_t kps2d_npz = cnpy::npz_load(kps2d_npzPath);
-        std::cout << kps2d_npzPath << std::endl;
+        // std::cout << kps2d_npzPath << std::endl;
         Eigen::Matrix<double, 3, Eigen::Dynamic> gtJoints(
             3, ava.model.numJoints() + 15);
         gtJoints.setZero();
@@ -241,7 +240,11 @@ int main(int argc, char** argv) {
         int j = 0;
         for(int i = 0; i < 76; ++i){
             // remove head to adapt smplh
-            if( i == 22 || i == 23 || i == 24 || i==60 || i == 61|| i == 62|| i == 63|| i == 64|| i == 65){
+            // if( i == 22 || i == 23 || i == 24 || i==60 || i == 61|| i == 62|| i == 63|| i == 64|| i == 65){
+            //     continue;
+            // }
+            // remove feet to adapt smplx
+            if(i==60 || i == 61|| i == 62|| i == 63|| i == 64|| i == 65){
                 continue;
             }
             gtJoints.col(j) = keypoints.col(i);
@@ -266,7 +269,7 @@ int main(int argc, char** argv) {
         cnpy::npz_t smplx_npz = cnpy::npz_load(smplx_npzPath);
         const auto& fullpose_raw = smplx_npz.at("fullpose");
         Eigen::Matrix<double, 3, Eigen::Dynamic> fullpose = ark::util::loadFloatMatrix(fullpose_raw, 55, 3).transpose();
-        fullpose.block(0, 22, 3, 33) = fullpose.block(0, 25, 3, 33);
+        // fullpose.block(0, 22, 3, 33) = fullpose.block(0, 25, 3, 33); // smplh
     
         
         const auto& transl_raw = smplx_npz.at("transl");

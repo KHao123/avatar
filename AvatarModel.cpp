@@ -21,8 +21,8 @@ AvatarModel::AvatarModel(const std::string& model_dir,
                          : model_dir;
     // path npzPath = modelPath / "model.npz";
     // path npzPath = "/Users/chenkanghao/workspace/compare/smplxpp/data/models/smpl/SMPL_MALE.npz";
-    // path npzPath = "../data/models/smplx/SMPLX_MALE.npz";
-    path npzPath = "../data/models/smplh/SMPLH_MALE.npz";
+    path npzPath = "../data/models/smplx/SMPLX_MALE.npz";
+    // path npzPath = "../data/models/smplh/SMPLH_MALE.npz";
     // path posePriorPath = modelPath / "pose_prior.txt";
     // path posePriorPath = "";
     if (exists(npzPath)) {
@@ -32,8 +32,9 @@ AvatarModel::AvatarModel(const std::string& model_dir,
         size_t n_joints = npz["kintree_table"].shape[1];
         size_t n_faces = npz["f"].shape[0];
         // std::cout<<npzPath<<std::endl;
-        std::cout << npz["shapedirs"].shape[0] << std::endl;
-        size_t n_shape_blends = npz["shapedirs"].shape[2];
+        // std::cout << npz["shapedirs"].shape[0] << std::endl;
+        // size_t n_shape_blends = npz["shapedirs"].shape[2];
+        size_t n_shape_blends = 10;
         size_t n_blend_shapes = n_shape_blends;
         std::cout << n_shape_blends << std::endl;
         using util::assertShape;
@@ -105,7 +106,7 @@ AvatarModel::AvatarModel(const std::string& model_dir,
         keyClouds.resize(3 * n_verts, n_blend_shapes);
         // Load shape-dep blend shapes
         const auto& sb_raw = npz.at("shapedirs");
-        assertShape(sb_raw, {n_verts, 3, n_shape_blends});
+        // assertShape(sb_raw, {n_verts, 3, n_shape_blends});
         keyClouds.leftCols(n_shape_blends).noalias() =
             util::loadFloatMatrix(sb_raw, 3 * n_verts, n_shape_blends);
 

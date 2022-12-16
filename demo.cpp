@@ -185,7 +185,7 @@ int main(int argc, char** argv) {
     // const auto& fullpose_raw = initial_smplx_npz.at("fullpose");
     // Eigen::Matrix<double, 100, 55, 3> all_hand_right_kps2d = ark::util::loadFloatMatrix(fullpose_raw, 100, 165);
     // using SmplxposeMap  =  Eigen::Map<Eigen::Matrix<double, 55, 3>>;
-    
+    cv::VideoWriter w_cap("../data/re_video.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 25, cv::Size(2048, 1536));
 
     while (true) {
         // body.update();
@@ -378,8 +378,8 @@ int main(int argc, char** argv) {
                         icpIters = reinitICPIters;
                         PROFILE(Prepare reinit);
                     }
-                    // avaOpt.optimize(gtJoints, fullpose, icpIters,
-                    //                 std::thread::hardware_concurrency());
+                    avaOpt.optimize(gtJoints, fullpose, icpIters,
+                                    std::thread::hardware_concurrency());
                     PROFILE(Optimize(Total));
                     printf(
                         "Overall (excluding visualization): %f ms\n",
@@ -441,12 +441,14 @@ int main(int argc, char** argv) {
         // cv::Scalar(0,0,255));
 
         // cv::imshow("Visual", vis);
-        cv::imwrite("proj_debug.jpg", vis);
-        break;
+        w_cap.write(vis);
+        // cv::imwrite("proj_debug.jpg", vis);
+        // break;
         // cv::imshow("Depth", depth);
         ++imId;
         int k = cv::waitKey(1);
         if (k == 'q') break;
     }  // while(true)
+    w_cap.release();
     return 0;
 }
